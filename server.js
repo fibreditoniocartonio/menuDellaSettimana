@@ -67,28 +67,30 @@ const formatList = (rawList) => {
     return finalObj;
 };
 
-// Helper: Ricalcola lista della spesa SEPARANDO pasti e dolci
+// Helper: Ricalcola lista della spesa 
+// Supporta customServings per ogni singolo pasto
 function calculateShoppingList(menu, dessert, people, dessertPeople) {
     const listMainRaw = {};
     const listDessertRaw = {};
 
     // 1. Calcola Pasti Principali
-    const meals = [];
     menu.forEach(day => {
-        if(day.lunch) meals.push(day.lunch);
-        if(day.dinner) meals.push(day.dinner);
-    });
-
-    meals.forEach(meal => {
-        const ratio = people / meal.servings;
-        meal.ingredients.forEach(ing => {
-            updateShoppingList(listMainRaw, ing.name, ing.quantity, ratio);
+        ['lunch', 'dinner'].forEach(slot => {
+            const meal = day[slot];
+            if (meal) {
+                // Se il pasto ha un settaggio persone specifico usa quello, altrimenti il globale
+                const mealPeople = meal.customServings ? meal.customServings : people;
+                const ratio = mealPeople / meal.servings;
+                
+                meal.ingredients.forEach(ing => {
+                    updateShoppingList(listMainRaw, ing.name, ing.quantity, ratio);
+                });
+            }
         });
     });
 
     // 2. Calcola Dolce (se presente)
     if(dessert) {
-        // Usa dessertPeople se definito, altrimenti people
         const dRatio = (dessertPeople || people) / dessert.servings;
         dessert.ingredients.forEach(ing => {
             updateShoppingList(listDessertRaw, ing.name, ing.quantity, dRatio);
@@ -158,7 +160,7 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
     });
 });
 
-// GENERA MENU
+// GENERA MENU COMPLETO
 app.post('/api/generate-menu', checkAuth, (req, res) => {
     const { people } = req.body;
     
@@ -200,7 +202,6 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             ? dolci[Math.floor(Math.random() * dolci.length)] 
             : null;
 
-        // Inizializza dessertPeople uguale a people
         const dessertPeople = people;
 
         const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople);
@@ -222,38 +223,94 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
     });
 });
 
-// RIGENERA SINGOLO GIORNO
-app.post('/api/regenerate-day', checkAuth, (req, res) => {
-    const { day } = req.body; 
+// --- NUOVO: Aggiorna porzioni singolo pasto ---
+app.post('/api/update-meal-servings', checkAuth, (req, res) => {
+    const { day, type, servings } = req.body; // type: 'lunch' o 'dinner'
+    
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        const dayIndex = day - 1;
+        
+        if(currentState.menu[dayIndex] && currentState.menu[dayIndex][type]) {
+            currentState.menu[dayIndex][type].customServings = parseInt(servings);
+            
+            // Ricalcola spesa
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+                res.json(currentState);
+            });
+        } else {
+            res.status(400).json({ error: "Pasto non trovato" });
+        }
+    });
+});
+
+// --- NUOVO: Rigenera Singolo Piatto (Randomizza mantenendo il tipo) ---
+app.post('/api/regenerate-meal', checkAuth, (req, res) => {
+    const { day, type } = req.body; // type: 'lunch' o 'dinner'
 
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
+        const dayIndex = day - 1;
+        const currentMeal = currentState.menu[dayIndex][type];
         
-        db.all("SELECT * FROM recipes", [], (err, rows) => {
-            const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-            const primi = allRecipes.filter(r => r.type === 'primo');
-            const secondi = allRecipes.filter(r => r.type === 'secondo');
+        if(!currentMeal) return res.status(400).json({error: "Pasto vuoto"});
 
-            const dayIndex = day - 1;
-            const currentDay = currentState.menu[dayIndex];
+        // Determina che tipo di ricetta cercare (primo o secondo) in base a cosa c'era prima
+        const targetType = currentMeal.type;
+
+        db.all("SELECT * FROM recipes WHERE type = ?", [targetType], (err, rows) => {
+            if (rows.length === 0) return res.json(currentState);
+
+            const allOptions = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
             
-            const pickNew = (pool, currentId) => {
-                if(pool.length <= 1) return pool[0] || null;
-                const others = pool.filter(r => r.id !== currentId);
-                return others[Math.floor(Math.random() * others.length)];
-            };
+            // Filtra per non riselezionare lo stesso piatto se possibile
+            let pool = allOptions.filter(r => r.id !== currentMeal.id);
+            if(pool.length === 0) pool = allOptions; // fallback se c'è solo una ricetta
 
-            if (currentDay.lunch && currentDay.lunch.type === 'primo') {
-                currentDay.lunch = pickNew(primi, currentDay.lunch.id);
-                currentDay.dinner = pickNew(secondi, currentDay.dinner.id);
-            } else {
-                currentDay.lunch = pickNew(secondi, currentDay.lunch.id);
-                currentDay.dinner = pickNew(primi, currentDay.dinner.id);
+            const newRecipe = pool[Math.floor(Math.random() * pool.length)];
+            
+            // Mantiene le customServings se erano state settate
+            if(currentMeal.customServings) {
+                newRecipe.customServings = currentMeal.customServings;
             }
 
-            currentState.menu[dayIndex] = currentDay;
+            currentState.menu[dayIndex][type] = newRecipe;
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+                res.json(currentState);
+            });
+        });
+    });
+});
+
+// --- NUOVO: Imposta Piatto Manuale (Forza ricetta) ---
+app.post('/api/set-manual-meal', checkAuth, (req, res) => {
+    const { day, type, recipeId } = req.body;
+    
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        let currentState = JSON.parse(rowState.data);
+        const dayIndex = day - 1;
+
+        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
+            if(err || !row) return res.status(400).json({error: "Ricetta non trovata"});
+            
+            const newRecipe = {...row, ingredients: JSON.parse(row.ingredients)};
+            const oldMeal = currentState.menu[dayIndex][type];
+
+            // Preserva customServings se esistevano
+            if(oldMeal && oldMeal.customServings) {
+                newRecipe.customServings = oldMeal.customServings;
+            }
+
+            currentState.menu[dayIndex][type] = newRecipe;
             currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
@@ -281,7 +338,6 @@ app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
             }
             
             currentState.dessert = options[Math.floor(Math.random() * options.length)];
-            // Assicuriamoci che dessertPeople esista (per retrocompatibilità)
             if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
 
             currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);

@@ -1,7 +1,7 @@
-const API_URL = '/api';
+﻿const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
-let dessertsCache = []; // Cache per la selezione del dolce
+let contextSelection = null; // Memorizza il contesto (giorno/pasto) per la selezione manuale
 
 // INIT
 document.addEventListener('DOMContentLoaded', () => {
@@ -267,26 +267,62 @@ async function generateMenu() {
     }
 }
 
+// Helper per generare l'HTML di una singola riga pasto (Pranzo o Cena)
+function renderMealControl(day, type, meal, defaultPeople) {
+    if (!meal) return `<div class="meal-row"><span>---</span></div>`;
+    
+    // Se la proprietà 'servings' specifica del pasto non esiste, usa quella globale
+    const currentServings = meal.customServings || defaultPeople;
+    
+    // Emoji tipo piatto
+    const typeEmoji = meal.type === 'primo' ? '🍝' : (meal.type === 'secondo' ? '🥩' : '🥘');
+    
+    // Stile etichetta
+    const labelStyle = type === 'lunch' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#fef3c7; color:#b45309;';
+    const labelText = type === 'lunch' ? 'Pranzo' : 'Cena';
+
+    return `
+    <div class="meal-row" style="flex-wrap: wrap; gap: 8px;">
+        <div class="meal-label-box" style="${labelStyle} padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem; min-width: 60px; text-align: center;">
+            ${labelText}
+        </div>
+        
+        <div style="flex-grow: 1; display: flex; flex-direction: column;">
+            <span style="font-weight: 500;">${typeEmoji} ${meal.name}</span>
+        </div>
+
+        <div class="meal-controls" style="display: flex; align-items: center; gap: 5px;">
+            <input type="number" 
+                   value="${currentServings}" 
+                   class="small-qty-input" 
+                   onchange="changeMealServings(${day}, '${type}', this.value)" 
+                   title="Persone">
+            
+            <button class="btn-icon" onclick="openMealSelector(${day}, '${type}')" title="Scegli Manualmente">
+                🔍
+            </button>
+            
+            <button class="btn-icon" onclick="regenerateSingleMeal(${day}, '${type}')" title="Randomizza Piatto">
+                🔄
+            </button>
+        </div>
+    </div>`;
+}
+
 function renderMenuData(data) {
     showView('view-menu');
     switchTab('tab-menu');
 
     // Menu Giornaliero
     const menuDiv = document.getElementById('weekly-menu-list');
-    menuDiv.innerHTML = data.menu.map((d, i) => `
+    menuDiv.innerHTML = data.menu.map((d) => `
         <div class="menu-day-card">
             <div class="menu-card-header">
                 <h4>Giorno ${d.day}</h4>
-                <button class="btn-icon" onclick="regenerateDay(${d.day})" title="Cambia menu">🔄</button>
             </div>
-            <div class="meal-row">
-                <span class="meal-label">Pranzo</span>
-                <span>${d.lunch ? d.lunch.name : '---'}</span>
-            </div>
-            <div class="meal-row">
-                <span class="meal-label">Cena</span>
-                <span>${d.dinner ? d.dinner.name : '---'}</span>
-            </div>
+            ${renderMealControl(d.day, 'lunch', d.lunch, data.people)}
+            <hr style="border:0; border-top:1px dashed #eee; margin: 10px 0;">
+            ${renderMealControl(d.day, 'dinner', d.dinner, data.people)}
         </div>
     `).join('');
     
@@ -300,12 +336,11 @@ function renderMenuData(data) {
             <div class="menu-card-header">
                 <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
                 <div class="dessert-controls">
-                    <button class="btn-icon" onclick="openDessertSelector()" title="Scegli Manualmente">🔍</button>
+                    <button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli Manualmente">🔍</button>
                     <button class="btn-icon" onclick="regenerateDessert()" title="Cambia Random">🔄</button>
                 </div>
             </div>
             <div class="meal-row" style="margin-bottom:15px;">
-                <span class="meal-label">Scelta</span>
                 <span>${data.dessert.name}</span>
             </div>
              <div class="meal-row" style="background:#fff3cd; padding:8px; border-radius:6px; justify-content:space-between;">
@@ -345,12 +380,20 @@ function renderMenuData(data) {
     shopContainer.innerHTML = html;
 }
 
-// --- FUNZIONI MENU & DOLCE ---
-async function regenerateDay(dayNumber) {
-    if(!(await showConfirm(`Vuoi cambiare le ricette del Giorno ${dayNumber}?`))) return;
-    const res = await apiCall('/regenerate-day', 'POST', { day: dayNumber });
+// --- AZIONI MENU: Rigenerazione Singola & Change Props ---
+
+async function regenerateSingleMeal(day, type) {
+    if(!(await showConfirm(`Vuoi cambiare questo piatto?`))) return;
+    
+    const res = await apiCall('/regenerate-meal', 'POST', { day, type });
     if(res.ok) renderMenuData(await res.json());
-    else await showAlert("Errore durante aggiornamento");
+    else await showAlert("Impossibile aggiornare il piatto.");
+}
+
+async function changeMealServings(day, type, val) {
+    if(val < 1) return;
+    const res = await apiCall('/update-meal-servings', 'POST', { day, type, servings: val });
+    if(res.ok) renderMenuData(await res.json());
 }
 
 async function regenerateDessert() {
@@ -365,44 +408,75 @@ async function changeDessertPeople(val) {
     if(res.ok) renderMenuData(await res.json());
 }
 
-async function openDessertSelector() {
-    // Carica ricette dolci e salva in cache
+// --- SELETTORE MANUALE GENERALE (Pasti e Dolci) ---
+
+async function openMealSelector(day, type) {
+    // day è null se stiamo scegliendo il dolce
+    contextSelection = { day, type };
+    
     const res = await apiCall('/recipes');
     const allRecipes = await res.json();
-    dessertsCache = allRecipes.filter(r => r.type === 'dolce');
+    recipesCache = allRecipes; // Aggiorna cache
 
-    const modal = document.getElementById('select-dessert-modal');
-    // Pulisce input ricerca
+    const modal = document.getElementById('select-dessert-modal'); // Usiamo lo stesso modale ma cambiamo titolo
+    const title = type === 'dessert' ? 'Scegli Dolce' : `Scegli per Giorno ${day}`;
+    document.querySelector('#select-dessert-modal .modal-header h3').innerText = title;
+
     document.getElementById('search-dessert').value = '';
     
-    // Renderizza lista completa iniziale
-    renderDessertSelectionList(dessertsCache);
-    
+    // Se è dolce filtriamo solo dolci, altrimenti mostriamo tutto (per permettere forzature)
+    const listToShow = (type === 'dessert') 
+        ? allRecipes.filter(r => r.type === 'dolce') 
+        : allRecipes.filter(r => r.type !== 'dolce'); // Mostriamo primi e secondi
+
+    renderManualSelectionList(listToShow);
     modal.classList.remove('hidden');
 }
 
-function renderDessertSelectionList(list) {
+function renderManualSelectionList(list) {
     const container = document.getElementById('dessert-selection-list');
-    container.innerHTML = list.map(d => `
-        <div class="recipe-card" onclick="selectManualDessert(${d.id})">
-            <div style="font-weight:bold">${d.name}</div>
+    container.innerHTML = list.map(r => `
+        <div class="recipe-card" onclick="selectManualRecipe(${r.id})">
+            <div style="font-weight:bold">
+                <span style="font-weight:normal; font-size:0.8rem">${r.type === 'primo' ? '🍝' : (r.type === 'secondo' ? '🥩' : '🍰')}</span>
+                ${r.name}
+            </div>
         </div>
     `).join('');
 
-    if(list.length === 0) container.innerHTML = "<p>Nessun dolce trovato.</p>";
+    if(list.length === 0) container.innerHTML = "<p>Nessuna ricetta trovata.</p>";
 }
 
-function filterDesserts() {
+function filterManualSelection() {
     const query = document.getElementById('search-dessert').value.toLowerCase();
-    const filtered = dessertsCache.filter(d => d.name.toLowerCase().includes(query));
-    renderDessertSelectionList(filtered);
+    
+    let filtered = [];
+    if (contextSelection.type === 'dessert') {
+        filtered = recipesCache.filter(r => r.type === 'dolce' && r.name.toLowerCase().includes(query));
+    } else {
+        // Cerca tra primi e secondi
+        filtered = recipesCache.filter(r => r.type !== 'dolce' && r.name.toLowerCase().includes(query));
+    }
+    
+    renderManualSelectionList(filtered);
 }
 
-async function selectManualDessert(id) {
+// Questa funzione sostituisce selectManualDessert
+async function selectManualRecipe(id) {
     document.getElementById('select-dessert-modal').classList.add('hidden');
-    const res = await apiCall('/set-manual-dessert', 'POST', { recipeId: id });
-    if(res.ok) renderMenuData(await res.json());
-    else await showAlert("Errore impostazione dolce.");
+    
+    if (contextSelection.type === 'dessert') {
+        const res = await apiCall('/set-manual-dessert', 'POST', { recipeId: id });
+        if(res.ok) renderMenuData(await res.json());
+    } else {
+        // È un pasto (pranzo o cena)
+        const res = await apiCall('/set-manual-meal', 'POST', { 
+            day: contextSelection.day, 
+            type: contextSelection.type, // lunch o dinner
+            recipeId: id 
+        });
+        if(res.ok) renderMenuData(await res.json());
+    }
 }
 
 // --- IMPORT / EXPORT JSON ---

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -12,7 +12,8 @@
     <div id="view-login" class="view active">
         <div class="login-card">
             <h1>👨‍🍳 Cucina</h1>
-            <p>Inserisci il codice segreto</p>
+            <p>Inserisci il pin di quattro cifre</p>
+            <p>(data del primo bacio)</p>
             <input type="password" id="access-code" placeholder="****" inputmode="numeric">
             <button class="btn-primary full-width" onclick="login()">Entra</button>
             <p id="login-error" class="error"></p>
@@ -98,9 +99,9 @@
                 <div class="col">
                     <label>Tipo</label>
                     <select id="rec-type">
-                        <option value="primo">Primo</option>
-                        <option value="secondo">Secondo</option>
-                        <option value="dolce">Dolce</option>
+                        <option value="primo">🍝 Primo</option>
+                        <option value="secondo">🥩 Secondo</option>
+                        <option value="dolce">🍰 Dolce</option>
                     </select>
                 </div>
                 <div class="col">
@@ -143,15 +144,15 @@
         </div>
     </div>
 
-    <!-- MODAL SELEZIONE MANUALE DOLCE (MODIFICATO) -->
+    <!-- MODAL SELEZIONE MANUALE (Unificato per Pasti e Dolci) -->
     <div id="select-dessert-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Scegli Dolce</h3>
+                <h3>Scegli Ricetta</h3>
                 <span class="close-btn" onclick="document.getElementById('select-dessert-modal').classList.add('hidden')">&times;</span>
             </div>
-            <!-- Nuova barra di ricerca -->
-            <input type="text" id="search-dessert" placeholder="🔍 Cerca dolce..." onkeyup="filterDesserts()">
+            <!-- Barra di ricerca generica che attiva il filtro manuale -->
+            <input type="text" id="search-dessert" placeholder="🔍 Cerca..." onkeyup="filterManualSelection()">
             <div id="dessert-selection-list"></div>
         </div>
     </div>
