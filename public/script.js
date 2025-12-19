@@ -1,4 +1,4 @@
-﻿const API_URL = '/api';
+const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
 
@@ -19,10 +19,8 @@ function showView(viewId) {
     
     const target = document.getElementById(viewId);
     target.classList.remove('hidden');
-    // Piccolo timeout per permettere l'animazione CSS
     setTimeout(() => target.classList.add('active'), 10);
 
-    // Aggiorna titolo navbar
     const titles = {
         'view-dashboard': 'Dashboard',
         'view-recipes': 'Ricettario',
@@ -36,7 +34,6 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     
-    // Trova il bottone che ha chiamato la funzione (tramite event o logica manuale)
     const btns = document.querySelectorAll('.tab-btn');
     if(tabId === 'tab-menu') btns[0].classList.add('active');
     else btns[1].classList.add('active');
@@ -95,16 +92,37 @@ async function loadRecipes() {
 function renderRecipeList(list) {
     const container = document.getElementById('recipes-list');
     container.innerHTML = '';
-    
+
+    // Raggruppamento per tipo
+    const groups = {
+        'primo': { title: '🍝 Primi', items: [] },
+        'secondo': { title: '🥩 Secondi', items: [] },
+        'dolce': { title: '🍰 Dolci', items: [] }
+    };
+
     list.forEach(r => {
-        const div = document.createElement('div');
-        div.className = 'recipe-card';
-        div.onclick = () => openRecipeModal(r);
-        div.innerHTML = `
-            <h4>${r.name}</h4>
-            <span>${r.type}</span>
-        `;
-        container.appendChild(div);
+        if(groups[r.type]) groups[r.type].items.push(r);
+    });
+
+    Object.keys(groups).forEach(type => {
+        const group = groups[type];
+        if (group.items.length > 0) {
+            const header = document.createElement('div');
+            header.className = 'recipe-group-header';
+            header.innerText = group.title;
+            container.appendChild(header);
+
+            group.items.forEach(r => {
+                const div = document.createElement('div');
+                div.className = 'recipe-card';
+                div.onclick = () => openRecipeModal(r);
+                div.innerHTML = `
+                    <div style="font-weight:bold">${r.name}</div>
+                    <span>${r.servings}p</span>
+                `;
+                container.appendChild(div);
+            });
+        }
     });
 }
 
@@ -120,7 +138,6 @@ function openRecipeModal(recipe = null) {
     const container = document.getElementById('ingredients-list');
     container.innerHTML = '';
     
-    // Reset o Popola
     if (recipe) {
         document.getElementById('modal-title').innerText = "Modifica Ricetta";
         document.getElementById('rec-id').value = recipe.id;
@@ -219,9 +236,12 @@ function renderMenuData(data) {
 
     // Menu Giornaliero
     const menuDiv = document.getElementById('weekly-menu-list');
-    menuDiv.innerHTML = data.menu.map(d => `
+    menuDiv.innerHTML = data.menu.map((d, i) => `
         <div class="menu-day-card">
-            <h4>Giorno ${d.day}</h4>
+            <div class="menu-card-header">
+                <h4>Giorno ${d.day}</h4>
+                <button class="btn-icon" onclick="regenerateDay(${d.day})" title="Cambia menu">🔄</button>
+            </div>
             <div class="meal-row">
                 <span class="meal-label">Pranzo</span>
                 <span>${d.lunch ? d.lunch.name : '---'}</span>
@@ -237,7 +257,16 @@ function renderMenuData(data) {
     const desCard = document.getElementById('dessert-card');
     if(data.dessert) {
         desCard.classList.remove('hidden');
-        document.getElementById('dessert-name').innerText = data.dessert.name;
+        desCard.innerHTML = `
+            <div class="menu-card-header">
+                <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
+                <button class="btn-icon" onclick="regenerateDessert()" title="Cambia dolce">🔄</button>
+            </div>
+            <div class="meal-row">
+                <span class="meal-label">Scelta</span>
+                <span>${data.dessert.name}</span>
+            </div>
+        `;
     } else {
         desCard.classList.add('hidden');
     }
@@ -252,16 +281,25 @@ function renderMenuData(data) {
     ).join('');
 }
 
-async function promptDessert() {
-    const people = prompt("Per quante persone?", "2");
-    if (!people) return;
-    const res = await apiCall('/generate-dessert', 'POST', { people });
-    const data = await res.json();
-    if (data.error) alert(data.error);
-    else renderMenuData(data);
+// --- NUOVE FUNZIONI DI RIGENERAZIONE ---
+async function regenerateDay(dayNumber) {
+    if(!confirm(`Vuoi cambiare le ricette del Giorno ${dayNumber}?`)) return;
+    const res = await apiCall('/regenerate-day', 'POST', { day: dayNumber });
+    if(res.ok) renderMenuData(await res.json());
+    else alert("Errore durante aggiornamento");
+}
+
+async function regenerateDessert() {
+    const res = await apiCall('/regenerate-dessert', 'POST', {}); 
+    if(res.ok) renderMenuData(await res.json());
+    else alert("Impossibile cambiare dolce (forse non ce ne sono altri?)");
 }
 
 // --- IMPORT / EXPORT JSON ---
+function showBackupModal() {
+    document.getElementById('backup-modal').classList.remove('hidden');
+}
+
 function exportJSON() {
     fetch(`${API_URL}/export-json`, { 
         headers: { 'Authorization': authToken } 
@@ -275,6 +313,7 @@ function exportJSON() {
         document.body.appendChild(a);
         a.click();
         a.remove();
+        document.getElementById('backup-modal').classList.add('hidden');
     });
 }
 
@@ -289,13 +328,18 @@ async function importJSON(inputElement) {
             const res = await apiCall('/import-json', 'POST', jsonData);
             const msg = await res.json();
             
-            if (res.ok) alert(msg.message);
-            else alert("Errore: " + msg.error);
+            if (res.ok) {
+                alert(msg.message);
+                loadRecipes(); // Ricarica lista se siamo lì
+            } else {
+                alert("Errore: " + msg.error);
+            }
             
         } catch (err) {
             alert("File JSON non valido");
         }
         inputElement.value = ''; 
+        document.getElementById('backup-modal').classList.add('hidden');
     };
     reader.readAsText(file);
 }

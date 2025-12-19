@@ -12,7 +12,7 @@ const SECRET_CODE = "0902";
 const DB_FILE = "recipes.db";
 
 app.use(cors());
-app.use(bodyParser.json({ limit: '10mb' })); // Aumentato limite per import grossi
+app.use(bodyParser.json({ limit: '10mb' })); 
 app.use(express.static(path.join(__dirname, 'public')));
 
 const db = new sqlite3.Database(DB_FILE);
@@ -56,6 +56,35 @@ const updateShoppingList = (list, name, qtyRaw, ratio) => {
         list[key].total += (qtyNum * ratio);
     }
 };
+
+// Helper: Ricalcola lista della spesa dall'intero menu attuale
+function calculateShoppingList(menu, dessert, people) {
+    const listRaw = {};
+    const itemsToProcess = [];
+
+    // Raccogli tutti i pasti
+    menu.forEach(day => {
+        if(day.lunch) itemsToProcess.push(day.lunch);
+        if(day.dinner) itemsToProcess.push(day.dinner);
+    });
+    if(dessert) itemsToProcess.push(dessert);
+
+    // Calcola ingredienti
+    itemsToProcess.forEach(meal => {
+        const ratio = people / meal.servings;
+        meal.ingredients.forEach(ing => {
+            updateShoppingList(listRaw, ing.name, ing.quantity, ratio);
+        });
+    });
+
+    // Formatta output
+    const finalObj = {};
+    Object.keys(listRaw).sort().forEach(k => {
+        const item = listRaw[k];
+        finalObj[toTitleCase(k)] = item.isQb ? "q.b." : Math.ceil(item.total);
+    });
+    return finalObj;
+}
 
 // --- ROTTE PUBLIC ---
 app.post('/api/login', (req, res) => {
@@ -114,7 +143,7 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
     });
 });
 
-// GENERA MENU
+// GENERA MENU (Nuova Logica)
 app.post('/api/generate-menu', checkAuth, (req, res) => {
     const { people } = req.body;
     
@@ -122,43 +151,42 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (rows.length < 2) return res.status(400).json({ error: "Inserisci almeno un po' di ricette prima!" });
         
-        const recipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-        const primi = recipes.filter(r => r.type === 'primo');
-        const secondi = recipes.filter(r => r.type === 'secondo');
+        const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+        const primi = allRecipes.filter(r => r.type === 'primo');
+        const secondi = allRecipes.filter(r => r.type === 'secondo');
+        const dolci = allRecipes.filter(r => r.type === 'dolce');
         
         const weekMenu = [];
-        const shoppingListRaw = {}; 
-        const getRandom = (arr) => arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : null;
+        const usedIds = new Set(); 
+
+        const getUniqueRandom = (sourceArray) => {
+            if (sourceArray.length === 0) return null;
+            let available = sourceArray.filter(r => !usedIds.has(r.id));
+            if (available.length === 0) available = sourceArray; // Reset se finiscono
+            
+            const selected = available[Math.floor(Math.random() * available.length)];
+            usedIds.add(selected.id);
+            return selected;
+        };
 
         for (let i = 0; i < 7; i++) {
             const dayMenu = { day: i + 1, lunch: null, dinner: null };
-            // Logica alternanza semplice
             if (i % 2 === 0) {
-                dayMenu.lunch = getRandom(primi);
-                dayMenu.dinner = getRandom(secondi);
+                dayMenu.lunch = getUniqueRandom(primi);
+                dayMenu.dinner = getUniqueRandom(secondi);
             } else {
-                dayMenu.lunch = getRandom(secondi);
-                dayMenu.dinner = getRandom(primi);
+                dayMenu.lunch = getUniqueRandom(secondi);
+                dayMenu.dinner = getUniqueRandom(primi);
             }
             weekMenu.push(dayMenu);
-
-            [dayMenu.lunch, dayMenu.dinner].forEach(meal => {
-                if (meal) {
-                    const ratio = people / meal.servings;
-                    meal.ingredients.forEach(ing => {
-                        updateShoppingList(shoppingListRaw, ing.name, ing.quantity, ratio);
-                    });
-                }
-            });
         }
 
-        const shoppingList = {};
-        Object.keys(shoppingListRaw).sort().forEach(k => {
-            const item = shoppingListRaw[k];
-            shoppingList[toTitleCase(k)] = item.isQb ? "q.b." : Math.ceil(item.total);
-        });
+        const selectedDessert = dolci.length > 0 
+            ? dolci[Math.floor(Math.random() * dolci.length)] 
+            : null;
 
-        const stateData = { menu: weekMenu, shoppingList, dessert: null, people };
+        const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people);
+        const stateData = { menu: weekMenu, shoppingList, dessert: selectedDessert, people };
         
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
             if (e) console.error(e);
@@ -176,41 +204,39 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
     });
 });
 
-// GENERA DOLCE
-app.post('/api/generate-dessert', checkAuth, (req, res) => {
-    const { people } = req.body;
-    
+// RIGENERA SINGOLO GIORNO
+app.post('/api/regenerate-day', checkAuth, (req, res) => {
+    const { day } = req.body; 
+
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
-        if (err || !rowState) return res.status(400).json({ error: "Genera prima un menu settimanale" });
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
         
-        db.all("SELECT * FROM recipes WHERE type = 'dolce'", [], (err, rows) => {
-            if (rows.length === 0) return res.json({ message: "Nessun dolce disponibile", currentState });
+        db.all("SELECT * FROM recipes", [], (err, rows) => {
+            const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+            const primi = allRecipes.filter(r => r.type === 'primo');
+            const secondi = allRecipes.filter(r => r.type === 'secondo');
+
+            const dayIndex = day - 1;
+            const currentDay = currentState.menu[dayIndex];
             
-            const randomDessert = rows[Math.floor(Math.random() * rows.length)];
-            randomDessert.ingredients = JSON.parse(randomDessert.ingredients);
-            
-            currentState.dessert = randomDessert;
-            
-            const ratio = people / randomDessert.servings;
-            randomDessert.ingredients.forEach(ing => {
-                const key = toTitleCase(ing.name.trim().toLowerCase());
-                const qtyNum = parseFloat(ing.quantity.toString().replace(',', '.'));
-                const isNewQb = isNaN(qtyNum);
-                
-                let currentVal = currentState.shoppingList[key];
-                
-                if (currentVal === undefined) {
-                    currentState.shoppingList[key] = isNewQb ? "q.b." : Math.ceil(qtyNum * ratio);
-                } else {
-                    if (currentVal === "q.b." || isNewQb) {
-                        currentState.shoppingList[key] = "q.b.";
-                    } else {
-                        currentState.shoppingList[key] = parseInt(currentVal) + Math.ceil(qtyNum * ratio);
-                    }
-                }
-            });
+            const pickNew = (pool, currentId) => {
+                if(pool.length <= 1) return pool[0] || null;
+                const others = pool.filter(r => r.id !== currentId);
+                return others[Math.floor(Math.random() * others.length)];
+            };
+
+            if (currentDay.lunch && currentDay.lunch.type === 'primo') {
+                currentDay.lunch = pickNew(primi, currentDay.lunch.id);
+                currentDay.dinner = pickNew(secondi, currentDay.dinner.id);
+            } else {
+                currentDay.lunch = pickNew(secondi, currentDay.lunch.id);
+                currentDay.dinner = pickNew(primi, currentDay.dinner.id);
+            }
+
+            currentState.menu[dayIndex] = currentDay;
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people);
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -219,47 +245,62 @@ app.post('/api/generate-dessert', checkAuth, (req, res) => {
     });
 });
 
-// --- NUOVO EXPORT JSON ---
+// RIGENERA DOLCE
+app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        
+        db.all("SELECT * FROM recipes WHERE type = 'dolce'", [], (err, rows) => {
+            if (rows.length === 0) return res.json(currentState);
+            
+            const allDesserts = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+            let options = allDesserts;
+            
+            if (currentState.dessert && allDesserts.length > 1) {
+                options = allDesserts.filter(d => d.id !== currentState.dessert.id);
+            }
+            
+            currentState.dessert = options[Math.floor(Math.random() * options.length)];
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people);
+
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+                res.json(currentState);
+            });
+        });
+    });
+});
+
+// EXPORT JSON
 app.get('/api/export-json', checkAuth, (req, res) => {
     db.all("SELECT name, type, servings, ingredients FROM recipes", [], (err, rows) => {
         if (err) return res.status(500).json({ error: "Errore export" });
-        
-        // rows contiene già ingredients come stringa JSON. Li parsiamo per avere un JSON pulito.
-        const cleanData = rows.map(r => ({
-            ...r,
-            ingredients: JSON.parse(r.ingredients)
-        }));
-
+        const cleanData = rows.map(r => ({ ...r, ingredients: JSON.parse(r.ingredients) }));
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', 'attachment; filename=ricette_backup.json');
         res.json(cleanData);
     });
 });
 
-// --- NUOVO IMPORT JSON ---
+// IMPORT JSON
 app.post('/api/import-json', checkAuth, (req, res) => {
-    const recipes = req.body; // body-parser gestisce il JSON array
-
-    if (!Array.isArray(recipes)) {
-        return res.status(400).json({ error: "Il file deve contenere una lista di ricette" });
-    }
+    const recipes = req.body;
+    if (!Array.isArray(recipes)) return res.status(400).json({ error: "JSON non valido" });
 
     const stmt = db.prepare(`INSERT INTO recipes (name, type, servings, ingredients) VALUES (?, ?, ?, ?)`);
-    
     db.serialize(() => {
         db.run("BEGIN TRANSACTION");
         recipes.forEach(r => {
-            // Controllo minimo validità
             if(r.name && r.type) {
-                // Se ingredients è già un oggetto/array, lo stringifichiamo per il DB
                 const ingString = typeof r.ingredients === 'object' ? JSON.stringify(r.ingredients) : r.ingredients;
                 stmt.run(r.name, r.type, r.servings || 2, ingString);
             }
         });
         db.run("COMMIT", (err) => {
             stmt.finalize();
-            if (err) return res.status(500).json({ error: "Errore durante importazione" });
-            res.json({ message: `Importate ${recipes.length} ricette con successo` });
+            if (err) return res.status(500).json({ error: "Errore import" });
+            res.json({ message: `Importate ${recipes.length} ricette` });
         });
     });
 });

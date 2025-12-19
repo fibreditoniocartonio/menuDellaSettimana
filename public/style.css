@@ -38,21 +38,35 @@ nav { background: var(--surface); padding: 15px 20px; display: flex; justify-con
 
 /* RECIPES LIST */
 .toolbar { display: flex; justify-content: space-between; margin-bottom: 15px; }
-.recipe-card { background: var(--surface); padding: 15px; margin-bottom: 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); cursor: pointer; }
+.recipe-card { background: var(--surface); padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); cursor: pointer; }
 .recipe-card h4 { margin: 0; font-size: 1rem; }
 .recipe-card span { font-size: 0.8rem; color: var(--text-light); background: #eee; padding: 2px 6px; border-radius: 4px; }
 
+/* Recipe Categories */
+.recipe-group-header { margin-top: 20px; margin-bottom: 10px; padding-bottom: 5px; border-bottom: 2px solid var(--primary); color: var(--primary-dark); font-weight: bold; font-size: 1.1rem; }
+
 /* MENU & SHOPPING TABS */
-.tab-header { display: flex; margin-bottom: 20px; background: #e5e7eb; border-radius: 8px; padding: 4px; }
+.tab-header { display: flex; margin-top: 10px; margin-bottom: 10px; background: #e5e7eb; border-radius: 8px; padding: 4px; }
 .tab-btn { flex: 1; background: transparent; border: none; padding: 10px; border-radius: 6px; font-weight: 600; color: var(--text-light); }
 .tab-btn.active { background: var(--surface); color: var(--primary); shadow: 0 1px 2px rgba(0,0,0,0.1); }
 .tab-content { display: none; }
 .tab-content.active { display: block; animation: fadeIn 0.2s; }
 
 .menu-day-card { background: var(--surface); padding: 15px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid var(--primary); box-shadow: var(--shadow); }
-.menu-day-card h4 { margin: 0 0 10px 0; color: var(--primary-dark); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
-.meal-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.95rem; }
-.meal-label { font-weight: bold; color: var(--text-light); font-size: 0.8rem; width: 60px; }
+.menu-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.menu-day-card h4 { margin: 0; color: var(--primary-dark); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Allineamento riga pasto corretto */
+.meal-row { display: flex; align-items: center; justify-content: flex-start; gap: 15px; margin-bottom: 8px; font-size: 0.95rem; }
+.meal-label { font-weight: bold; color: var(--text-light); font-size: 0.8rem; width: 60px; flex-shrink: 0; }
+
+/* Dessert Card specifica per matchare stile */
+#dessert-card { background: var(--surface); padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid var(--warning); box-shadow: var(--shadow); }
+#dessert-card h4 { color: #d97706; }
+
+/* Bottoni icone rigenera */
+.btn-icon { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 0 5px; line-height: 1; transition: transform 0.2s; }
+.btn-icon:active { transform: rotate(180deg); }
 
 /* CHECKLIST SPESA */
 .checklist { list-style: none; padding: 0; }
@@ -80,6 +94,8 @@ button { cursor: pointer; font-size: 1rem; border: none; border-radius: 6px; tra
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: flex-end; z-index: 200; }
 .modal-content { background: var(--surface); width: 100%; max-width: 600px; border-radius: 16px 16px 0 0; padding: 20px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s ease; }
 .modal-content.small { border-radius: 16px; margin-bottom: 20vh; width: 300px; }
+.text-center { text-align: center; }
+
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .close-btn { font-size: 24px; color: var(--text-light); cursor: pointer; }

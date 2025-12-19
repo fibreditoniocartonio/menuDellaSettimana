@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -43,15 +43,11 @@
                 <h3>Ricettario</h3>
                 <p>Gestisci i piatti</p>
             </div>
-            <div class="card-action secondary" onclick="exportJSON()">
+            <!-- Bottone Unico Backup -->
+            <div class="card-action secondary" onclick="showBackupModal()">
                 <div class="icon">💾</div>
-                <h3>Backup</h3>
-                <p>Scarica dati</p>
-            </div>
-            <div class="card-action secondary" onclick="document.getElementById('json-file').click()">
-                <div class="icon">📂</div>
-                <h3>Ripristina</h3>
-                <p>Carica dati</p>
+                <h3>Backup / Ripristino</h3>
+                <p>Gestione dati</p>
             </div>
         </div>
         <!-- Input file nascosto per import -->
@@ -83,12 +79,11 @@
 
         <!-- Contenuto Tab Menu -->
         <div id="tab-menu" class="tab-content active">
+            <!-- Dolce spostato qui, generato automaticamente -->
             <div id="dessert-card" class="card highlight hidden">
-                <h4>🍰 Dolce della Settimana</h4>
-                <p id="dessert-name"></p>
+                <!-- Popolato via JS -->
             </div>
             <div id="weekly-menu-list"></div>
-            <button class="btn-warning full-width" style="margin-top:20px" onclick="promptDessert()">+ Aggiungi/Cambia Dolce</button>
         </div>
 
         <!-- Contenuto Tab Spesa -->
@@ -146,6 +141,19 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
                 <button class="btn-primary" onclick="generateMenu()">Vai!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BACKUP -->
+    <div id="backup-modal" class="modal hidden">
+        <div class="modal-content small text-center">
+            <h3>Gestione Dati</h3>
+            <p>Cosa vuoi fare?</p>
+            <div class="col" style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+                <button class="btn-primary full-width" onclick="exportJSON()">⬇️ Scarica Backup</button>
+                <button class="btn-warning full-width" onclick="document.getElementById('json-file').click()">⬆️ Carica Backup</button>
+                <button class="btn-secondary full-width" onclick="document.getElementById('backup-modal').classList.add('hidden')">Chiudi</button>
             </div>
         </div>
     </div>
