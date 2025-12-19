@@ -1,4 +1,4 @@
-const API_URL = '/api';
+﻿const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 
 // Inizializzazione
@@ -120,7 +120,7 @@ function addIngredientRow(name = '', qty = '') {
     div.className = 'ingredient-row';
     div.innerHTML = `
         <input type="text" placeholder="Ingrediente" class="ing-name" value="${name}">
-        <input type="number" placeholder="Quantità (es. gr)" class="ing-qty" value="${qty}">
+        <input type="text" placeholder="Quantità (es. 100 o qb)" class="ing-qty" value="${qty}">
         <button class="btn-danger" onclick="this.parentElement.remove()">X</button>
     `;
     document.getElementById('ingredients-list').appendChild(div);
@@ -177,16 +177,22 @@ function showGenerateModal() {
     document.getElementById('generate-modal').classList.remove('hidden');
 }
 
-async function generateMenu() {
-    const people = document.getElementById('gen-people').value;
-    document.getElementById('generate-modal').classList.add('hidden');
-    
-    const data = await apiCall('/generate-menu', 'POST', { people });
-    
+// --- GESTIONE ULTIMO MENU ---
+async function loadLastMenu() {
+    const data = await apiCall('/last-menu');
+    if (!data) {
+        alert("Nessun menu salvato in precedenza.");
+        return;
+    }
+    renderMenuData(data);
+}
+
+// Funzione unificata per renderizzare (usata da generateMenu e loadLastMenu)
+function renderMenuData(data) {
     document.getElementById('menu-section').classList.remove('hidden');
     document.getElementById('recipes-section').classList.add('hidden');
     
-    // Render Menu
+    // Mostra Menu Settimanale
     const menuDiv = document.getElementById('weekly-menu-display');
     menuDiv.innerHTML = '<h4>Menu Settimanale</h4><ul>' + 
         data.menu.map(d => `
@@ -196,12 +202,84 @@ async function generateMenu() {
                 Cena: ${d.dinner ? d.dinner.name : '---'}
             </li>
         `).join('') + '</ul>';
-        
-    // Render Shopping List
+    
+    // Mostra Dolce se presente
+    const dessertLabel = document.getElementById('dessert-display');
+    dessertLabel.innerText = data.dessert ? `Dolce: ${data.dessert.name}` : "";
+
+    // Mostra Lista Spesa
     const shopDiv = document.getElementById('shopping-list-display');
+    // I dati arrivano già formattati e capitalizzati dal server
     const listHtml = Object.keys(data.shoppingList).map(k => 
-        `<li>${k}: <b>${Math.ceil(data.shoppingList[k])}</b></li>`
+        `<li>${k}: <b>${data.shoppingList[k]}</b></li>`
     ).join('');
     
-    shopDiv.innerHTML = `<h4>Lista Spesa (per ${people} pers.)</h4><ul>${listHtml || 'Niente da comprare'}</ul>`;
+    shopDiv.innerHTML = `<h4>Lista Spesa (per ${data.people} pers.)</h4><ul>${listHtml || 'Niente da comprare'}</ul>`;
+}
+
+async function generateMenu() {
+    const people = document.getElementById('gen-people').value;
+    document.getElementById('generate-modal').classList.add('hidden');
+    const data = await apiCall('/generate-menu', 'POST', { people });
+    renderMenuData(data);
+}
+
+// --- GESTIONE DOLCE ---
+async function promptDessert() {
+    const people = prompt("Per quante persone vuoi il dolce?", "2");
+    if (!people) return;
+    
+    const data = await apiCall('/generate-dessert', 'POST', { people });
+    if (data.error) {
+        alert(data.error);
+    } else {
+        if (!data.dessert) alert("Nessuna ricetta 'dolce' trovata.");
+        renderMenuData(data); // Ricarica la vista aggiornata
+    }
+}
+
+// --- IMPORT / EXPORT CSV ---
+function exportCSV() {
+    // Chiamata diretta per download (non usa apiCall wrapper perché ritorna blob/text)
+    fetch(`${API_URL}/export-csv`, { 
+        headers: { 'Authorization': authToken } 
+    })
+    .then(res => res.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "ricette_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+    });
+}
+
+async function importCSV(inputElement) {
+    const file = inputElement.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const text = e.target.result;
+        // Invia come testo grezzo
+        const res = await fetch(`${API_URL}/import-csv`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': authToken,
+                'Content-Type': 'text/plain' 
+            },
+            body: text
+        });
+        
+        if (res.ok) {
+            alert("Ricette importate con successo!");
+            loadRecipes();
+        } else {
+            alert("Errore nell'importazione");
+        }
+        inputElement.value = ''; // Reset input
+    };
+    reader.readAsText(file);
 }

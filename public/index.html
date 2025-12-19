@@ -26,6 +26,10 @@
         <div class="main-actions">
             <button class="btn-mega" onclick="showGenerateModal()">Genera Menu Settimana</button>
             <button class="btn-primary" onclick="loadRecipes()">Consulta Ricette</button>
+    <button class="btn-primary" onclick="loadLastMenu()">Vedi Ultimo Menu</button>
+    <button class="btn-secondary" onclick="exportCSV()">Esporta CSV</button>
+    <button class="btn-secondary" onclick="document.getElementById('csv-file').click()">Importa CSV</button>
+    <input type="file" id="csv-file" class="hidden" accept=".csv" onchange="importCSV(this)">
         </div>
 
         <!-- SEZIONE LISTA RICETTE -->
@@ -43,6 +47,10 @@
         <!-- SEZIONE MENU GENERATO -->
         <div id="menu-section" class="section hidden">
             <h3>Menu Generato & Lista Spesa</h3>
+    <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px;">
+        <button class="btn-warning" onclick="promptDessert()">+ Aggiungi Dolce della Settimana</button>
+        <span id="dessert-display" style="font-weight: bold; margin-left: 10px;"></span>
+    </div>
             <div class="split-view">
                 <div id="weekly-menu-display"></div>
                 <div id="shopping-list-display"></div>
@@ -66,7 +74,6 @@
                 <option value="primo">Primo</option>
                 <option value="secondo">Secondo</option>
                 <option value="dolce">Dolce</option>
-                <option value="altro">Altro</option>
             </select>
             
             <label>Per quante persone:</label>
