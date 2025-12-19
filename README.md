@@ -1,50 +1,70 @@
-# ??? Gestore Menu Famiglia
+# 👨‍🍳 Gestore Menu Famiglia
 
-Un'applicazione web semplice e leggera realizzata in Node.js per gestire le ricette di casa, generare menu settimanali equilibrati e compilare automaticamente la lista della spesa.
+Un'applicazione web semplice e leggera realizzata in **Node.js** per gestire le ricette di casa, generare menu settimanali equilibrati e compilare automaticamente la lista della spesa sincronizzata.
 
-L'obiettivo del progetto � avere uno strumento personale, privo di dipendenze complesse lato client, facile da installare e gestire su un piccolo server casalingo o sul proprio PC.
+L'obiettivo del progetto è avere uno strumento personale, privo di framework complessi lato client, facile da installare e gestire su un piccolo server casalingo o su hosting gratuiti (es. Alwaysdata).
 
-## ??? Requisiti di Sistema
+## ✨ Funzionalità
+
+*   **Gestione Ricette**: Crea, modifica ed elimina ricette con ingredienti e porzioni.
+*   **Generatore Menu**: Algoritmo che bilancia Primi e Secondi tra pranzo e cena per 7 giorni.
+*   **Lista della Spesa Smart**:
+    *   Somma automatica degli ingredienti (es. 200g + 100g = 300g).
+    *   Supporto per unità "q.b." (quanto basta).
+    *   **Sync in Tempo Reale**: Le spunte sulla lista sono salvate sul server e visibili da tutti i dispositivi connessi.
+    *   **Safety Uncheck**: Se aumenti le persone a cena, la spunta sull'ingrediente si toglie automaticamente per obbligarti a ricontrollare se ne hai abbastanza.
+*   **Backup Dati**: Importazione ed Esportazione completa in formato JSON.
+
+## 🛠️ Requisiti di Sistema
 
 Per eseguire il server hai bisogno solo di:
 *   **Node.js**: (Versione 14 o superiore raccomandata).
 *   **NPM**: Solitamente installato insieme a Node.js.
 
-*Nota: Non serve installare database esterni (come MySQL o MongoDB) perch� l'app utilizza **SQLite**, che salva tutto in un semplice file locale.*
+*Nota: Non serve installare database esterni (come MySQL o MongoDB) perché l'app utilizza **SQLite**, che salva tutto in un semplice file locale.*
 
-## ?? Installazione e Avvio
+## 🚀 Installazione e Avvio
 
-1.  **Scarica il progetto**
-    Inserisci i file `server.js`, `package.json` e la cartella `public` (con `index.html`, `style.css`, `script.js`) in una directory.
+### 1. Scarica il progetto
+Inserisci i file `server.js`, `package.json` e la cartella `public` (con `index.html`, `style.css`, `script.js`) in una directory.
 
-2.  **Installa le dipendenze**
-    Apri il terminale nella cartella del progetto ed esegui:
-    ```bash
-    npm install
-    ```
-    *Questo installer� automaticamente: `express`, `sqlite3`, `cors`, `body-parser`.*
+### 2. Installa le dipendenze
+Apri il terminale nella cartella del progetto ed esegui:
+```bash
+npm install express sqlite3 cors body-parser
+```
 
-3.  **Avvia il Server**
-    Sempre da terminale:
-    ```bash
-    node server.js
-    ```
-    Dovresti vedere il messaggio: `Server attivo su http://localhost:3000`.
+### 3. Avvia il Server
 
-4.  **Primo Accesso**
-    *   Apri il browser e vai su `http://localhost:3000`.
-    *   Inserisci il codice di accesso predefinito: **0902**.
+**In Locale:**
+```bash
+node server.js
+```
+Il server partirà su `http://localhost:3000`.
 
-## ?? Struttura del Progetto
+**Su Hosting (es. Alwaysdata):**
+Il server è configurato per leggere automaticamente le variabili d'ambiente `PORT` e `IP` (o `HOST`) fornite dal provider.
+```bash
+node server.js
+```
 
-*   **server.js**: Il cuore dell'applicazione. Gestisce le API, la logica del menu e il database SQLite.
-*   **recipes.db**: (Generato automaticamente all'avvio) Il file che contiene tutte le tue ricette e il menu salvato.
-*   **public/**:
-    *   `index.html`: L'interfaccia utente.
-    *   `style.css`: Lo stile grafico.
-    *   `script.js`: La logica lato client che comunica con il server.
+### 4. Primo Accesso
+1.  Apri il browser.
+2.  Inserisci il codice di accesso predefinito (modificabile in `server.js`): **0902**.
 
-## ?? Note sull'uso
+## 📂 Struttura del Progetto
 
-*   **Backup**: Per fare un backup dei dati, basta copiare il file `recipes.db` oppure usare la funzione "Esporta CSV" dall'interfaccia.
-*   **Quantit�**: Puoi inserire numeri (es. `100` per 100g) o testo come `qb` o `quanto basta`. Il sistema sommer� i numeri e lascer� il testo invariato nella lista della spesa.
+*   **`server.js`**: Il cuore dell'applicazione. Gestisce le API, la logica del menu, il calcolo della spesa e il database SQLite.
+*   **`recipes.db`**: (Generato automaticamente al primo avvio) Il file SQLite che contiene tutte le tue ricette, il menu corrente e lo stato della spesa.
+*   **`package.json`**: Elenco delle dipendenze.
+*   **`public/`**:
+    *   `index.html`: L'interfaccia utente (Single Page Application).
+    *   `style.css`: Foglio di stile responsive (Mobile first).
+    *   `script.js`: Logica frontend per comunicare con le API.
+
+## 📝 Note sull'uso
+
+*   **Backup**: Per fare un backup, usa il tasto **"Backup / Ripristino"** nella dashboard e scarica il file `.json`. Non serve copiare manualmente il file `.db`.
+*   **Inserimento Ingredienti**:
+    *   **Numeri**: Inserisci solo numeri (es. `100`) se vuoi che vengano sommati matematicamente.
+    *   **Testo**: Puoi inserire `qb`, `mezzo bicchiere`, `un pizzico`. Il sistema li raggrupperà nella lista senza fare calcoli matematici.
