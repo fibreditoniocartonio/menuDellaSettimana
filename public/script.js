@@ -1,6 +1,7 @@
 const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
+let dessertsCache = []; // Cache per la selezione del dolce
 
 // INIT
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,6 +12,44 @@ document.addEventListener('DOMContentLoaded', () => {
         showView('view-login');
     }
 });
+
+// --- CUSTOM ALERTS & CONFIRMS ---
+function showCustomDialog(title, message, isConfirm = false) {
+    return new Promise((resolve) => {
+        const container = document.getElementById('custom-dialog-container');
+        container.innerHTML = `
+            <div class="custom-dialog-overlay">
+                <div class="custom-dialog-box">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="dialog-buttons">
+                        ${isConfirm ? `<button class="btn-secondary" id="dialog-cancel">Annulla</button>` : ''}
+                        <button class="btn-primary" id="dialog-ok">OK</button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const okBtn = document.getElementById('dialog-ok');
+        const cancelBtn = document.getElementById('dialog-cancel');
+
+        const close = (result) => {
+            container.innerHTML = '';
+            resolve(result);
+        };
+
+        okBtn.onclick = () => close(true);
+        if (cancelBtn) cancelBtn.onclick = () => close(false);
+    });
+}
+
+async function showAlert(message) {
+    await showCustomDialog("Avviso", message, false);
+}
+
+async function showConfirm(message) {
+    return await showCustomDialog("Conferma", message, true);
+}
 
 // --- NAVIGATION SYSTEM ---
 function showView(viewId) {
@@ -93,7 +132,6 @@ function renderRecipeList(list) {
     const container = document.getElementById('recipes-list');
     container.innerHTML = '';
 
-    // Raggruppamento per tipo
     const groups = {
         'primo': { title: '🍝 Primi', items: [] },
         'secondo': { title: '🥩 Secondi', items: [] },
@@ -145,7 +183,6 @@ function openRecipeModal(recipe = null) {
         document.getElementById('rec-type').value = recipe.type;
         document.getElementById('rec-servings').value = recipe.servings;
         document.getElementById('btn-delete-rec').style.display = 'block';
-        
         recipe.ingredients.forEach(ing => addIngredientRow(ing.name, ing.quantity));
     } else {
         document.getElementById('modal-title').innerText = "Nuova Ricetta";
@@ -196,7 +233,7 @@ async function saveRecipe() {
 
 async function deleteCurrentRecipe() {
     const id = document.getElementById('rec-id').value;
-    if (!id || !confirm("Eliminare questa ricetta?")) return;
+    if (!id || !(await showConfirm("Eliminare questa ricetta?"))) return;
     await apiCall(`/recipes/${id}`, 'DELETE');
     closeRecipeModal();
     loadRecipes();
@@ -211,7 +248,7 @@ async function loadLastMenu() {
     const res = await apiCall('/last-menu');
     const data = await res.json();
     if (!data) {
-        alert("Nessun menu salvato.");
+        await showAlert("Nessun menu salvato.");
         return;
     }
     renderMenuData(data);
@@ -226,7 +263,7 @@ async function generateMenu() {
         renderMenuData(await res.json());
     } else {
         const err = await res.json();
-        alert(err.error);
+        await showAlert(err.error);
     }
 }
 
@@ -257,42 +294,115 @@ function renderMenuData(data) {
     const desCard = document.getElementById('dessert-card');
     if(data.dessert) {
         desCard.classList.remove('hidden');
+        const currentDessertPeople = data.dessertPeople || data.people;
+        
         desCard.innerHTML = `
             <div class="menu-card-header">
                 <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
-                <button class="btn-icon" onclick="regenerateDessert()" title="Cambia dolce">🔄</button>
+                <div class="dessert-controls">
+                    <button class="btn-icon" onclick="openDessertSelector()" title="Scegli Manualmente">🔍</button>
+                    <button class="btn-icon" onclick="regenerateDessert()" title="Cambia Random">🔄</button>
+                </div>
             </div>
-            <div class="meal-row">
+            <div class="meal-row" style="margin-bottom:15px;">
                 <span class="meal-label">Scelta</span>
                 <span>${data.dessert.name}</span>
+            </div>
+             <div class="meal-row" style="background:#fff3cd; padding:8px; border-radius:6px; justify-content:space-between;">
+                <span class="meal-label" style="width:auto;">Per quante persone?</span>
+                <input type="number" class="dessert-people-input" value="${currentDessertPeople}" onchange="changeDessertPeople(this.value)">
             </div>
         `;
     } else {
         desCard.classList.add('hidden');
     }
 
-    // Lista Spesa
-    const shopList = document.getElementById('shopping-list-ul');
-    shopList.innerHTML = Object.keys(data.shoppingList).map(k => 
-        `<li onclick="this.classList.toggle('checked')">
-            <span>${k}</span>
-            <b>${data.shoppingList[k]}</b>
-        </li>`
-    ).join('');
+    // Lista Spesa (Divisa)
+    const shopContainer = document.getElementById('shopping-container');
+    let html = '';
+
+    const mainList = data.shoppingList.main || data.shoppingList;
+    const dessertList = data.shoppingList.dessert || {};
+
+    const renderListItems = (listObj) => {
+        if(Object.keys(listObj).length === 0) return '<p style="color:#999; padding:10px;">Niente qui.</p>';
+        return Object.keys(listObj).map(k => 
+            `<li onclick="this.classList.toggle('checked')">
+                <span>${k}</span>
+                <b>${listObj[k]}</b>
+            </li>`
+        ).join('');
+    };
+
+    html += `<div class="shopping-section-title">🛒 Pasti Principali</div>`;
+    html += `<ul class="checklist">${renderListItems(mainList)}</ul>`;
+
+    if (data.dessert) {
+        html += `<div class="shopping-section-title" style="margin-top:30px; color:#d97706;">🍰 Dolce</div>`;
+        html += `<ul class="checklist">${renderListItems(dessertList)}</ul>`;
+    }
+
+    shopContainer.innerHTML = html;
 }
 
-// --- NUOVE FUNZIONI DI RIGENERAZIONE ---
+// --- FUNZIONI MENU & DOLCE ---
 async function regenerateDay(dayNumber) {
-    if(!confirm(`Vuoi cambiare le ricette del Giorno ${dayNumber}?`)) return;
+    if(!(await showConfirm(`Vuoi cambiare le ricette del Giorno ${dayNumber}?`))) return;
     const res = await apiCall('/regenerate-day', 'POST', { day: dayNumber });
     if(res.ok) renderMenuData(await res.json());
-    else alert("Errore durante aggiornamento");
+    else await showAlert("Errore durante aggiornamento");
 }
 
 async function regenerateDessert() {
+    if(!(await showConfirm("Sicuro di voler cambiare il dolce?"))) return;
     const res = await apiCall('/regenerate-dessert', 'POST', {}); 
     if(res.ok) renderMenuData(await res.json());
-    else alert("Impossibile cambiare dolce (forse non ce ne sono altri?)");
+    else await showAlert("Impossibile cambiare dolce.");
+}
+
+async function changeDessertPeople(val) {
+    const res = await apiCall('/update-dessert-servings', 'POST', { servings: val });
+    if(res.ok) renderMenuData(await res.json());
+}
+
+async function openDessertSelector() {
+    // Carica ricette dolci e salva in cache
+    const res = await apiCall('/recipes');
+    const allRecipes = await res.json();
+    dessertsCache = allRecipes.filter(r => r.type === 'dolce');
+
+    const modal = document.getElementById('select-dessert-modal');
+    // Pulisce input ricerca
+    document.getElementById('search-dessert').value = '';
+    
+    // Renderizza lista completa iniziale
+    renderDessertSelectionList(dessertsCache);
+    
+    modal.classList.remove('hidden');
+}
+
+function renderDessertSelectionList(list) {
+    const container = document.getElementById('dessert-selection-list');
+    container.innerHTML = list.map(d => `
+        <div class="recipe-card" onclick="selectManualDessert(${d.id})">
+            <div style="font-weight:bold">${d.name}</div>
+        </div>
+    `).join('');
+
+    if(list.length === 0) container.innerHTML = "<p>Nessun dolce trovato.</p>";
+}
+
+function filterDesserts() {
+    const query = document.getElementById('search-dessert').value.toLowerCase();
+    const filtered = dessertsCache.filter(d => d.name.toLowerCase().includes(query));
+    renderDessertSelectionList(filtered);
+}
+
+async function selectManualDessert(id) {
+    document.getElementById('select-dessert-modal').classList.add('hidden');
+    const res = await apiCall('/set-manual-dessert', 'POST', { recipeId: id });
+    if(res.ok) renderMenuData(await res.json());
+    else await showAlert("Errore impostazione dolce.");
 }
 
 // --- IMPORT / EXPORT JSON ---
@@ -329,14 +439,15 @@ async function importJSON(inputElement) {
             const msg = await res.json();
             
             if (res.ok) {
-                alert(msg.message);
-                loadRecipes(); // Ricarica lista se siamo lì
+                await showAlert(msg.message);
+                const currentView = document.querySelector('.view.active');
+                if(currentView && currentView.id === 'view-recipes') loadRecipes();
             } else {
-                alert("Errore: " + msg.error);
+                await showAlert("Errore: " + msg.error);
             }
             
         } catch (err) {
-            alert("File JSON non valido");
+            await showAlert("File JSON non valido");
         }
         inputElement.value = ''; 
         document.getElementById('backup-modal').classList.add('hidden');

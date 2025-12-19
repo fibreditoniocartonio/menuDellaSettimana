@@ -44,6 +44,7 @@ const checkAuth = (req, res, next) => {
 
 // UTILS
 const toTitleCase = (str) => str.replace(/\b\w/g, l => l.toUpperCase());
+
 const updateShoppingList = (list, name, qtyRaw, ratio) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
@@ -57,33 +58,47 @@ const updateShoppingList = (list, name, qtyRaw, ratio) => {
     }
 };
 
-// Helper: Ricalcola lista della spesa dall'intero menu attuale
-function calculateShoppingList(menu, dessert, people) {
-    const listRaw = {};
-    const itemsToProcess = [];
-
-    // Raccogli tutti i pasti
-    menu.forEach(day => {
-        if(day.lunch) itemsToProcess.push(day.lunch);
-        if(day.dinner) itemsToProcess.push(day.dinner);
-    });
-    if(dessert) itemsToProcess.push(dessert);
-
-    // Calcola ingredienti
-    itemsToProcess.forEach(meal => {
-        const ratio = people / meal.servings;
-        meal.ingredients.forEach(ing => {
-            updateShoppingList(listRaw, ing.name, ing.quantity, ratio);
-        });
-    });
-
-    // Formatta output
+const formatList = (rawList) => {
     const finalObj = {};
-    Object.keys(listRaw).sort().forEach(k => {
-        const item = listRaw[k];
+    Object.keys(rawList).sort().forEach(k => {
+        const item = rawList[k];
         finalObj[toTitleCase(k)] = item.isQb ? "q.b." : Math.ceil(item.total);
     });
     return finalObj;
+};
+
+// Helper: Ricalcola lista della spesa SEPARANDO pasti e dolci
+function calculateShoppingList(menu, dessert, people, dessertPeople) {
+    const listMainRaw = {};
+    const listDessertRaw = {};
+
+    // 1. Calcola Pasti Principali
+    const meals = [];
+    menu.forEach(day => {
+        if(day.lunch) meals.push(day.lunch);
+        if(day.dinner) meals.push(day.dinner);
+    });
+
+    meals.forEach(meal => {
+        const ratio = people / meal.servings;
+        meal.ingredients.forEach(ing => {
+            updateShoppingList(listMainRaw, ing.name, ing.quantity, ratio);
+        });
+    });
+
+    // 2. Calcola Dolce (se presente)
+    if(dessert) {
+        // Usa dessertPeople se definito, altrimenti people
+        const dRatio = (dessertPeople || people) / dessert.servings;
+        dessert.ingredients.forEach(ing => {
+            updateShoppingList(listDessertRaw, ing.name, ing.quantity, dRatio);
+        });
+    }
+
+    return {
+        main: formatList(listMainRaw),
+        dessert: formatList(listDessertRaw)
+    };
 }
 
 // --- ROTTE PUBLIC ---
@@ -143,7 +158,7 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
     });
 });
 
-// GENERA MENU (Nuova Logica)
+// GENERA MENU
 app.post('/api/generate-menu', checkAuth, (req, res) => {
     const { people } = req.body;
     
@@ -162,7 +177,7 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
         const getUniqueRandom = (sourceArray) => {
             if (sourceArray.length === 0) return null;
             let available = sourceArray.filter(r => !usedIds.has(r.id));
-            if (available.length === 0) available = sourceArray; // Reset se finiscono
+            if (available.length === 0) available = sourceArray; 
             
             const selected = available[Math.floor(Math.random() * available.length)];
             usedIds.add(selected.id);
@@ -185,8 +200,11 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             ? dolci[Math.floor(Math.random() * dolci.length)] 
             : null;
 
-        const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people);
-        const stateData = { menu: weekMenu, shoppingList, dessert: selectedDessert, people };
+        // Inizializza dessertPeople uguale a people
+        const dessertPeople = people;
+
+        const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople);
+        const stateData = { menu: weekMenu, shoppingList, dessert: selectedDessert, people, dessertPeople };
         
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
             if (e) console.error(e);
@@ -236,7 +254,7 @@ app.post('/api/regenerate-day', checkAuth, (req, res) => {
             }
 
             currentState.menu[dayIndex] = currentDay;
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people);
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -245,7 +263,7 @@ app.post('/api/regenerate-day', checkAuth, (req, res) => {
     });
 });
 
-// RIGENERA DOLCE
+// RIGENERA DOLCE (RANDOM)
 app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
@@ -263,7 +281,50 @@ app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
             }
             
             currentState.dessert = options[Math.floor(Math.random() * options.length)];
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people);
+            // Assicuriamoci che dessertPeople esista (per retrocompatibilità)
+            if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
+
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+                res.json(currentState);
+            });
+        });
+    });
+});
+
+// AGGIORNA PORZIONI DOLCE
+app.post('/api/update-dessert-servings', checkAuth, (req, res) => {
+    const { servings } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        currentState.dessertPeople = parseInt(servings);
+        currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+            res.json(currentState);
+        });
+    });
+});
+
+// IMPOSTA DOLCE MANUALE
+app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
+    const { recipeId } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+
+        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
+            if(err || !row) return res.status(400).json({error: "Ricetta non trovata"});
+            
+            const newDessert = {...row, ingredients: JSON.parse(row.ingredients)};
+            currentState.dessert = newDessert;
+            if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
+            
+            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);

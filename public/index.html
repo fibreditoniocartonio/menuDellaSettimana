@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -19,7 +19,7 @@
         </div>
     </div>
 
-    <!-- HEADER FISSO (Appare dopo il login) -->
+    <!-- HEADER FISSO -->
     <nav id="navbar" class="hidden">
         <span id="nav-title">Dashboard</span>
         <button class="btn-text" onclick="logout()">Esci</button>
@@ -43,14 +43,12 @@
                 <h3>Ricettario</h3>
                 <p>Gestisci i piatti</p>
             </div>
-            <!-- Bottone Unico Backup -->
             <div class="card-action secondary" onclick="showBackupModal()">
                 <div class="icon">💾</div>
                 <h3>Backup / Ripristino</h3>
                 <p>Gestione dati</p>
             </div>
         </div>
-        <!-- Input file nascosto per import -->
         <input type="file" id="json-file" class="hidden" accept=".json" onchange="importJSON(this)">
     </div>
 
@@ -61,35 +59,28 @@
             <button class="btn-success" onclick="openRecipeModal()">+ Nuova</button>
         </div>
         <input type="text" id="search-recipe" placeholder="🔍 Cerca ricetta..." onkeyup="filterRecipes()">
-        
-        <div id="recipes-list" class="list-container">
-            <!-- Popolato via JS -->
-        </div>
+        <div id="recipes-list" class="list-container"></div>
     </div>
 
     <!-- VISTA MENU & SPESA -->
     <div id="view-menu" class="view hidden padded">
         <button class="btn-secondary" onclick="showView('view-dashboard')">⬅ Torna alla Home</button>
         
-        <!-- Tab Switcher -->
         <div class="tab-header">
             <button class="tab-btn active" onclick="switchTab('tab-menu')">Menu</button>
             <button class="tab-btn" onclick="switchTab('tab-shopping')">Lista Spesa</button>
         </div>
 
-        <!-- Contenuto Tab Menu -->
+        <!-- Tab Menu -->
         <div id="tab-menu" class="tab-content active">
-            <!-- Dolce spostato qui, generato automaticamente -->
-            <div id="dessert-card" class="card highlight hidden">
-                <!-- Popolato via JS -->
-            </div>
+            <div id="dessert-card" class="card highlight hidden"></div>
             <div id="weekly-menu-list"></div>
         </div>
 
-        <!-- Contenuto Tab Spesa -->
+        <!-- Tab Spesa -->
         <div id="tab-shopping" class="tab-content">
             <div class="info-box">Clicca sugli ingredienti per spuntarli.</div>
-            <ul id="shopping-list-ul" class="checklist"></ul>
+            <div id="shopping-container"></div>
         </div>
     </div>
 
@@ -100,12 +91,9 @@
                 <h3 id="modal-title">Ricetta</h3>
                 <span class="close-btn" onclick="closeRecipeModal()">&times;</span>
             </div>
-            
             <input type="hidden" id="rec-id">
-            
             <label>Nome Piatto</label>
             <input type="text" id="rec-name" placeholder="Es. Carbonara">
-            
             <div class="row">
                 <div class="col">
                     <label>Tipo</label>
@@ -120,11 +108,9 @@
                     <input type="number" id="rec-servings" value="2">
                 </div>
             </div>
-            
             <label>Ingredienti</label>
             <div id="ingredients-list"></div>
             <button class="btn-small btn-secondary" onclick="addIngredientRow()">+ Aggiungi Ingrediente</button>
-            
             <div class="modal-footer">
                 <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none;">Elimina</button>
                 <button class="btn-primary" onclick="saveRecipe()">Salva</button>
@@ -149,7 +135,6 @@
     <div id="backup-modal" class="modal hidden">
         <div class="modal-content small text-center">
             <h3>Gestione Dati</h3>
-            <p>Cosa vuoi fare?</p>
             <div class="col" style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
                 <button class="btn-primary full-width" onclick="exportJSON()">⬇️ Scarica Backup</button>
                 <button class="btn-warning full-width" onclick="document.getElementById('json-file').click()">⬆️ Carica Backup</button>
@@ -157,6 +142,22 @@
             </div>
         </div>
     </div>
+
+    <!-- MODAL SELEZIONE MANUALE DOLCE (MODIFICATO) -->
+    <div id="select-dessert-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Scegli Dolce</h3>
+                <span class="close-btn" onclick="document.getElementById('select-dessert-modal').classList.add('hidden')">&times;</span>
+            </div>
+            <!-- Nuova barra di ricerca -->
+            <input type="text" id="search-dessert" placeholder="🔍 Cerca dolce..." onkeyup="filterDesserts()">
+            <div id="dessert-selection-list"></div>
+        </div>
+    </div>
+
+    <!-- CUSTOM DIALOG CONTAINER -->
+    <div id="custom-dialog-container"></div>
 
     <script src="script.js"></script>
 </body>
