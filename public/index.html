@@ -2,103 +2,151 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestore Menu Famiglia</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Family Menu</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <!-- LOGIN -->
-    <div id="login-screen" class="container center-screen">
-        <h1>Benvenuto</h1>
-        <input type="password" id="access-code" placeholder="Codice di accesso">
-        <button onclick="login()">Entra</button>
-        <p id="login-error" class="error"></p>
+    <div id="view-login" class="view active">
+        <div class="login-card">
+            <h1>👨‍🍳 Cucina</h1>
+            <p>Inserisci il codice segreto</p>
+            <input type="password" id="access-code" placeholder="****" inputmode="numeric">
+            <button class="btn-primary full-width" onclick="login()">Entra</button>
+            <p id="login-error" class="error"></p>
+        </div>
     </div>
 
-    <!-- MAIN APP (Hidden by default) -->
-    <div id="app-screen" class="container hidden">
-        <header>
-            <h2>Gestione Cucina</h2>
-            <button class="btn-secondary" onclick="logout()">Esci</button>
-        </header>
+    <!-- HEADER FISSO (Appare dopo il login) -->
+    <nav id="navbar" class="hidden">
+        <span id="nav-title">Dashboard</span>
+        <button class="btn-text" onclick="logout()">Esci</button>
+    </nav>
 
-        <div class="main-actions">
-            <button class="btn-mega" onclick="showGenerateModal()">Genera Menu Settimana</button>
-            <button class="btn-primary" onclick="loadRecipes()">Consulta Ricette</button>
-    <button class="btn-primary" onclick="loadLastMenu()">Vedi Ultimo Menu</button>
-    <button class="btn-secondary" onclick="exportCSV()">Esporta CSV</button>
-    <button class="btn-secondary" onclick="document.getElementById('csv-file').click()">Importa CSV</button>
-    <input type="file" id="csv-file" class="hidden" accept=".csv" onchange="importCSV(this)">
-        </div>
-
-        <!-- SEZIONE LISTA RICETTE -->
-        <div id="recipes-section" class="section hidden">
-            <div class="toolbar">
-                <button class="btn-success" onclick="openRecipeModal()">+ Nuova Ricetta</button>
-                <button id="btn-edit" class="btn-warning" disabled onclick="editSelectedRecipe()">Modifica</button>
-                <button id="btn-delete" class="btn-danger" disabled onclick="deleteSelectedRecipes()">Elimina</button>
+    <!-- DASHBOARD -->
+    <div id="view-dashboard" class="view hidden padded">
+        <div class="grid-menu">
+            <div class="card-action" onclick="loadLastMenu()">
+                <div class="icon">📅</div>
+                <h3>Menu Attuale</h3>
+                <p>Vedi cosa si mangia</p>
             </div>
-            <div id="recipes-list" class="list-container">
-                <!-- Tabella ricette generata via JS -->
+            <div class="card-action" onclick="showGenerateModal()">
+                <div class="icon">⚡</div>
+                <h3>Nuovo Menu</h3>
+                <p>Genera la settimana</p>
+            </div>
+            <div class="card-action" onclick="loadRecipes()">
+                <div class="icon">📖</div>
+                <h3>Ricettario</h3>
+                <p>Gestisci i piatti</p>
+            </div>
+            <div class="card-action secondary" onclick="exportJSON()">
+                <div class="icon">💾</div>
+                <h3>Backup</h3>
+                <p>Scarica dati</p>
+            </div>
+            <div class="card-action secondary" onclick="document.getElementById('json-file').click()">
+                <div class="icon">📂</div>
+                <h3>Ripristina</h3>
+                <p>Carica dati</p>
             </div>
         </div>
-
-        <!-- SEZIONE MENU GENERATO -->
-        <div id="menu-section" class="section hidden">
-            <h3>Menu Generato & Lista Spesa</h3>
-    <div style="margin-bottom: 15px; padding: 10px; background: #fff3cd; border-radius: 4px;">
-        <button class="btn-warning" onclick="promptDessert()">+ Aggiungi Dolce della Settimana</button>
-        <span id="dessert-display" style="font-weight: bold; margin-left: 10px;"></span>
+        <!-- Input file nascosto per import -->
+        <input type="file" id="json-file" class="hidden" accept=".json" onchange="importJSON(this)">
     </div>
-            <div class="split-view">
-                <div id="weekly-menu-display"></div>
-                <div id="shopping-list-display"></div>
+
+    <!-- VISTA RICETTE -->
+    <div id="view-recipes" class="view hidden padded">
+        <div class="toolbar">
+            <button class="btn-secondary" onclick="showView('view-dashboard')">⬅ Indietro</button>
+            <button class="btn-success" onclick="openRecipeModal()">+ Nuova</button>
+        </div>
+        <input type="text" id="search-recipe" placeholder="🔍 Cerca ricetta..." onkeyup="filterRecipes()">
+        
+        <div id="recipes-list" class="list-container">
+            <!-- Popolato via JS -->
+        </div>
+    </div>
+
+    <!-- VISTA MENU & SPESA -->
+    <div id="view-menu" class="view hidden padded">
+        <button class="btn-secondary" onclick="showView('view-dashboard')">⬅ Torna alla Home</button>
+        
+        <!-- Tab Switcher -->
+        <div class="tab-header">
+            <button class="tab-btn active" onclick="switchTab('tab-menu')">Menu</button>
+            <button class="tab-btn" onclick="switchTab('tab-shopping')">Lista Spesa</button>
+        </div>
+
+        <!-- Contenuto Tab Menu -->
+        <div id="tab-menu" class="tab-content active">
+            <div id="dessert-card" class="card highlight hidden">
+                <h4>🍰 Dolce della Settimana</h4>
+                <p id="dessert-name"></p>
             </div>
-            <button onclick="document.getElementById('menu-section').classList.add('hidden')">Chiudi</button>
+            <div id="weekly-menu-list"></div>
+            <button class="btn-warning full-width" style="margin-top:20px" onclick="promptDessert()">+ Aggiungi/Cambia Dolce</button>
+        </div>
+
+        <!-- Contenuto Tab Spesa -->
+        <div id="tab-shopping" class="tab-content">
+            <div class="info-box">Clicca sugli ingredienti per spuntarli.</div>
+            <ul id="shopping-list-ul" class="checklist"></ul>
         </div>
     </div>
 
     <!-- MODAL RICETTA -->
     <div id="recipe-modal" class="modal hidden">
         <div class="modal-content">
-            <span class="close" onclick="closeRecipeModal()">&times;</span>
-            <h3 id="modal-title">Nuova Ricetta</h3>
+            <div class="modal-header">
+                <h3 id="modal-title">Ricetta</h3>
+                <span class="close-btn" onclick="closeRecipeModal()">&times;</span>
+            </div>
+            
             <input type="hidden" id="rec-id">
             
-            <label>Nome:</label>
-            <input type="text" id="rec-name">
+            <label>Nome Piatto</label>
+            <input type="text" id="rec-name" placeholder="Es. Carbonara">
             
-            <label>Tipo:</label>
-            <select id="rec-type">
-                <option value="primo">Primo</option>
-                <option value="secondo">Secondo</option>
-                <option value="dolce">Dolce</option>
-            </select>
-            
-            <label>Per quante persone:</label>
-            <input type="number" id="rec-servings" value="2">
-            
-            <label>Ingredienti:</label>
-            <div id="ingredients-list">
-                <!-- Righe ingredienti -->
+            <div class="row">
+                <div class="col">
+                    <label>Tipo</label>
+                    <select id="rec-type">
+                        <option value="primo">Primo</option>
+                        <option value="secondo">Secondo</option>
+                        <option value="dolce">Dolce</option>
+                    </select>
+                </div>
+                <div class="col">
+                    <label>Persone</label>
+                    <input type="number" id="rec-servings" value="2">
+                </div>
             </div>
-            <button class="btn-small" onclick="addIngredientRow()">+ Aggiungi Ingrediente</button>
+            
+            <label>Ingredienti</label>
+            <div id="ingredients-list"></div>
+            <button class="btn-small btn-secondary" onclick="addIngredientRow()">+ Aggiungi Ingrediente</button>
             
             <div class="modal-footer">
-                <button class="btn-success" onclick="saveRecipe()">Salva</button>
+                <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none;">Elimina</button>
+                <button class="btn-primary" onclick="saveRecipe()">Salva</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL GENERA MENU (Numero persone) -->
+    <!-- MODAL GENERA -->
     <div id="generate-modal" class="modal hidden">
         <div class="modal-content small">
             <h3>Genera Menu</h3>
-            <label>Per quante persone?</label>
-            <input type="number" id="gen-people" value="2">
-            <button class="btn-mega" onclick="generateMenu()">Procedi</button>
-            <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
+            <p>Per quante persone cucini?</p>
+            <input type="number" id="gen-people" value="2" style="font-size: 2rem; text-align: center; width: 80px;">
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
+                <button class="btn-primary" onclick="generateMenu()">Vai!</button>
+            </div>
         </div>
     </div>
 
