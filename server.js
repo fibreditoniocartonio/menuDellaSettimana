@@ -1,11 +1,13 @@
-const express = require('express');
+﻿const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 
-const app = express();
-const PORT = 3000;
+const app = express();    
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.IP || "0.0.0.0";
+
 
 // CONFIGURAZIONE
 const SECRET_CODE = "0902"; 
@@ -58,18 +60,48 @@ const updateShoppingList = (list, name, qtyRaw, ratio) => {
     }
 };
 
-const formatList = (rawList) => {
+// Helper per formattare la lista con "Safety Uncheck"
+const formatList = (rawList, oldList = {}) => {
     const finalObj = {};
     Object.keys(rawList).sort().forEach(k => {
-        const item = rawList[k];
-        finalObj[toTitleCase(k)] = item.isQb ? "q.b." : Math.ceil(item.total);
+        const item = rawList[k]; // item.total è il NUOVO numero calcolato
+        const titleKey = toTitleCase(k);
+        const oldItem = oldList[titleKey];
+        
+        // Calcolo la nuova quantità visualizzata
+        const newQtyDisplay = item.isQb ? "q.b." : Math.ceil(item.total);
+
+        let isChecked = false;
+
+        // Se l'item esisteva ed era spuntato, facciamo il controllo di sicurezza
+        if (oldItem && oldItem.checked) {
+            if (item.isQb) {
+                // Se è "quanto basta" (es. sale, olio), manteniamo la spunta
+                isChecked = true;
+            } else {
+                // Recuperiamo la vecchia quantità numerica (togliendo eventuali "q.b." o testi)
+                const oldQtyNum = parseFloat(oldItem.qty);
+                
+                // Se la conversione fallisce o se la nuova quantità è MAGGIORE della vecchia
+                // togliamo la spunta per sicurezza.
+                if (!isNaN(oldQtyNum) && Math.ceil(item.total) <= oldQtyNum) {
+                    isChecked = true;
+                }
+                // ALTRIMENTI: isChecked rimane false (Reset di sicurezza)
+            }
+        }
+
+        finalObj[titleKey] = {
+            qty: newQtyDisplay,
+            checked: isChecked
+        };
     });
     return finalObj;
 };
 
 // Helper: Ricalcola lista della spesa 
-// Supporta customServings per ogni singolo pasto
-function calculateShoppingList(menu, dessert, people, dessertPeople) {
+// Accetta oldShoppingList per preservare le spunte durante i ricalcoli
+function calculateShoppingList(menu, dessert, people, dessertPeople, oldShoppingList = { main: {}, dessert: {} }) {
     const listMainRaw = {};
     const listDessertRaw = {};
 
@@ -78,7 +110,6 @@ function calculateShoppingList(menu, dessert, people, dessertPeople) {
         ['lunch', 'dinner'].forEach(slot => {
             const meal = day[slot];
             if (meal) {
-                // Se il pasto ha un settaggio persone specifico usa quello, altrimenti il globale
                 const mealPeople = meal.customServings ? meal.customServings : people;
                 const ratio = mealPeople / meal.servings;
                 
@@ -89,7 +120,7 @@ function calculateShoppingList(menu, dessert, people, dessertPeople) {
         });
     });
 
-    // 2. Calcola Dolce (se presente)
+    // 2. Calcola Dolce
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
         dessert.ingredients.forEach(ing => {
@@ -98,8 +129,8 @@ function calculateShoppingList(menu, dessert, people, dessertPeople) {
     }
 
     return {
-        main: formatList(listMainRaw),
-        dessert: formatList(listDessertRaw)
+        main: formatList(listMainRaw, oldShoppingList.main || {}),
+        dessert: formatList(listDessertRaw, oldShoppingList.dessert || {})
     };
 }
 
@@ -204,6 +235,7 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
 
         const dessertPeople = people;
 
+        // Nuova generazione: non passiamo oldList perché è un menu completamente nuovo
         const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople);
         const stateData = { menu: weekMenu, shoppingList, dessert: selectedDessert, people, dessertPeople };
         
@@ -223,9 +255,32 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
     });
 });
 
-// --- NUOVO: Aggiorna porzioni singolo pasto ---
+// --- TOGGLE SHOPPING ITEM (NUOVO) ---
+app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
+    const { category, item } = req.body; // category: 'main' o 'dessert', item: 'Nome Ingrediente'
+    
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        
+        // Controlla se l'elemento esiste nella lista
+        if (currentState.shoppingList[category] && currentState.shoppingList[category][item]) {
+            // Inverti lo stato checked
+            currentState.shoppingList[category][item].checked = !currentState.shoppingList[category][item].checked;
+            
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+                res.json(currentState);
+            });
+        } else {
+            res.status(404).json({ error: "Ingrediente non trovato" });
+        }
+    });
+});
+
+// --- Aggiorna porzioni singolo pasto ---
 app.post('/api/update-meal-servings', checkAuth, (req, res) => {
-    const { day, type, servings } = req.body; // type: 'lunch' o 'dinner'
+    const { day, type, servings } = req.body;
     
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
@@ -236,8 +291,14 @@ app.post('/api/update-meal-servings', checkAuth, (req, res) => {
         if(currentState.menu[dayIndex] && currentState.menu[dayIndex][type]) {
             currentState.menu[dayIndex][type].customServings = parseInt(servings);
             
-            // Ricalcola spesa
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            // Passiamo la vecchia lista per preservare le spunte
+            currentState.shoppingList = calculateShoppingList(
+                currentState.menu, 
+                currentState.dessert, 
+                currentState.people, 
+                currentState.dessertPeople,
+                currentState.shoppingList // <--- Passiamo lo stato precedente
+            );
             
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -248,9 +309,9 @@ app.post('/api/update-meal-servings', checkAuth, (req, res) => {
     });
 });
 
-// --- NUOVO: Rigenera Singolo Piatto (Randomizza mantenendo il tipo) ---
+// --- Rigenera Singolo Piatto ---
 app.post('/api/regenerate-meal', checkAuth, (req, res) => {
-    const { day, type } = req.body; // type: 'lunch' o 'dinner'
+    const { day, type } = req.body;
 
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
@@ -261,27 +322,29 @@ app.post('/api/regenerate-meal', checkAuth, (req, res) => {
         
         if(!currentMeal) return res.status(400).json({error: "Pasto vuoto"});
 
-        // Determina che tipo di ricetta cercare (primo o secondo) in base a cosa c'era prima
         const targetType = currentMeal.type;
 
         db.all("SELECT * FROM recipes WHERE type = ?", [targetType], (err, rows) => {
             if (rows.length === 0) return res.json(currentState);
 
             const allOptions = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-            
-            // Filtra per non riselezionare lo stesso piatto se possibile
             let pool = allOptions.filter(r => r.id !== currentMeal.id);
-            if(pool.length === 0) pool = allOptions; // fallback se c'è solo una ricetta
+            if(pool.length === 0) pool = allOptions; 
 
             const newRecipe = pool[Math.floor(Math.random() * pool.length)];
             
-            // Mantiene le customServings se erano state settate
             if(currentMeal.customServings) {
                 newRecipe.customServings = currentMeal.customServings;
             }
 
             currentState.menu[dayIndex][type] = newRecipe;
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            currentState.shoppingList = calculateShoppingList(
+                currentState.menu, 
+                currentState.dessert, 
+                currentState.people, 
+                currentState.dessertPeople,
+                currentState.shoppingList // Preserva spunte
+            );
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -290,7 +353,7 @@ app.post('/api/regenerate-meal', checkAuth, (req, res) => {
     });
 });
 
-// --- NUOVO: Imposta Piatto Manuale (Forza ricetta) ---
+// --- Imposta Piatto Manuale ---
 app.post('/api/set-manual-meal', checkAuth, (req, res) => {
     const { day, type, recipeId } = req.body;
     
@@ -305,13 +368,18 @@ app.post('/api/set-manual-meal', checkAuth, (req, res) => {
             const newRecipe = {...row, ingredients: JSON.parse(row.ingredients)};
             const oldMeal = currentState.menu[dayIndex][type];
 
-            // Preserva customServings se esistevano
             if(oldMeal && oldMeal.customServings) {
                 newRecipe.customServings = oldMeal.customServings;
             }
 
             currentState.menu[dayIndex][type] = newRecipe;
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            currentState.shoppingList = calculateShoppingList(
+                currentState.menu, 
+                currentState.dessert, 
+                currentState.people, 
+                currentState.dessertPeople,
+                currentState.shoppingList // Preserva spunte
+            );
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -320,7 +388,7 @@ app.post('/api/set-manual-meal', checkAuth, (req, res) => {
     });
 });
 
-// RIGENERA DOLCE (RANDOM)
+// RIGENERA DOLCE
 app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
@@ -340,7 +408,13 @@ app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
             currentState.dessert = options[Math.floor(Math.random() * options.length)];
             if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
 
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            currentState.shoppingList = calculateShoppingList(
+                currentState.menu, 
+                currentState.dessert, 
+                currentState.people, 
+                currentState.dessertPeople,
+                currentState.shoppingList // Preserva spunte
+            );
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -357,7 +431,14 @@ app.post('/api/update-dessert-servings', checkAuth, (req, res) => {
         
         let currentState = JSON.parse(rowState.data);
         currentState.dessertPeople = parseInt(servings);
-        currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+        
+        currentState.shoppingList = calculateShoppingList(
+            currentState.menu, 
+            currentState.dessert, 
+            currentState.people, 
+            currentState.dessertPeople,
+            currentState.shoppingList // Preserva spunte
+        );
 
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
             res.json(currentState);
@@ -380,7 +461,13 @@ app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
             currentState.dessert = newDessert;
             if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
             
-            currentState.shoppingList = calculateShoppingList(currentState.menu, currentState.dessert, currentState.people, currentState.dessertPeople);
+            currentState.shoppingList = calculateShoppingList(
+                currentState.menu, 
+                currentState.dessert, 
+                currentState.people, 
+                currentState.dessertPeople,
+                currentState.shoppingList // Preserva spunte
+            );
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
                 res.json(currentState);
@@ -423,5 +510,5 @@ app.post('/api/import-json', checkAuth, (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Chef App attiva su http://localhost:${PORT}`);
+    console.log(`Chef App attiva su http://[${HOST}]:${PORT}`);
 });

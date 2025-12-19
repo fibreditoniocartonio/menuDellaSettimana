@@ -1,4 +1,4 @@
-﻿const API_URL = '/api';
+const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
 let contextSelection = null; // Memorizza il contesto (giorno/pasto) per la selezione manuale
@@ -267,17 +267,13 @@ async function generateMenu() {
     }
 }
 
-// Helper per generare l'HTML di una singola riga pasto (Pranzo o Cena)
+// Helper per generare l'HTML di una singola riga pasto
 function renderMealControl(day, type, meal, defaultPeople) {
     if (!meal) return `<div class="meal-row"><span>---</span></div>`;
     
-    // Se la proprietà 'servings' specifica del pasto non esiste, usa quella globale
     const currentServings = meal.customServings || defaultPeople;
-    
-    // Emoji tipo piatto
     const typeEmoji = meal.type === 'primo' ? '🍝' : (meal.type === 'secondo' ? '🥩' : '🥘');
     
-    // Stile etichetta
     const labelStyle = type === 'lunch' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#fef3c7; color:#b45309;';
     const labelText = type === 'lunch' ? 'Pranzo' : 'Cena';
 
@@ -310,8 +306,12 @@ function renderMealControl(day, type, meal, defaultPeople) {
 }
 
 function renderMenuData(data) {
+    // 1. MEMORIZZA QUALE TAB È ATTIVO PRIMA DI RIDISEGNARE
+    // Se l'elemento #tab-shopping ha la classe 'active', significa che l'utente è lì.
+    const shoppingTabEl = document.getElementById('tab-shopping');
+    const isShoppingActive = shoppingTabEl && shoppingTabEl.classList.contains('active');
+
     showView('view-menu');
-    switchTab('tab-menu');
 
     // Menu Giornaliero
     const menuDiv = document.getElementById('weekly-menu-list');
@@ -352,32 +352,50 @@ function renderMenuData(data) {
         desCard.classList.add('hidden');
     }
 
-    // Lista Spesa (Divisa)
+    // Lista Spesa
     const shopContainer = document.getElementById('shopping-container');
     let html = '';
 
     const mainList = data.shoppingList.main || data.shoppingList;
     const dessertList = data.shoppingList.dessert || {};
 
-    const renderListItems = (listObj) => {
+    const renderListItems = (listObj, category) => {
         if(Object.keys(listObj).length === 0) return '<p style="color:#999; padding:10px;">Niente qui.</p>';
-        return Object.keys(listObj).map(k => 
-            `<li onclick="this.classList.toggle('checked')">
+        return Object.keys(listObj).map(k => {
+            const item = listObj[k];
+            return `<li class="${item.checked ? 'checked' : ''}" 
+                        onclick="toggleShoppingItem('${category}', '${k.replace(/'/g, "\\'")}')">
                 <span>${k}</span>
-                <b>${listObj[k]}</b>
-            </li>`
-        ).join('');
+                <b>${item.qty}</b>
+            </li>`;
+        }).join('');
     };
 
     html += `<div class="shopping-section-title">🛒 Pasti Principali</div>`;
-    html += `<ul class="checklist">${renderListItems(mainList)}</ul>`;
+    html += `<ul class="checklist">${renderListItems(mainList, 'main')}</ul>`;
 
     if (data.dessert) {
         html += `<div class="shopping-section-title" style="margin-top:30px; color:#d97706;">🍰 Dolce</div>`;
-        html += `<ul class="checklist">${renderListItems(dessertList)}</ul>`;
+        html += `<ul class="checklist">${renderListItems(dessertList, 'dessert')}</ul>`;
     }
 
     shopContainer.innerHTML = html;
+
+    // 2. RIPRISTINA IL TAB CORRETTO
+    if (isShoppingActive) {
+        switchTab('tab-shopping');
+    } else {
+        switchTab('tab-menu');
+    }
+}
+
+// --- NUOVA FUNZIONE: Toggle Spesa Server-Side ---
+async function toggleShoppingItem(category, itemName) {
+    const res = await apiCall('/toggle-shopping-item', 'POST', { category, item: itemName });
+    if (res.ok) {
+        const updatedData = await res.json();
+        renderMenuData(updatedData);
+    }
 }
 
 // --- AZIONI MENU: Rigenerazione Singola & Change Props ---
@@ -411,23 +429,21 @@ async function changeDessertPeople(val) {
 // --- SELETTORE MANUALE GENERALE (Pasti e Dolci) ---
 
 async function openMealSelector(day, type) {
-    // day è null se stiamo scegliendo il dolce
     contextSelection = { day, type };
     
     const res = await apiCall('/recipes');
     const allRecipes = await res.json();
-    recipesCache = allRecipes; // Aggiorna cache
+    recipesCache = allRecipes; 
 
-    const modal = document.getElementById('select-dessert-modal'); // Usiamo lo stesso modale ma cambiamo titolo
+    const modal = document.getElementById('select-dessert-modal');
     const title = type === 'dessert' ? 'Scegli Dolce' : `Scegli per Giorno ${day}`;
     document.querySelector('#select-dessert-modal .modal-header h3').innerText = title;
 
     document.getElementById('search-dessert').value = '';
     
-    // Se è dolce filtriamo solo dolci, altrimenti mostriamo tutto (per permettere forzature)
     const listToShow = (type === 'dessert') 
         ? allRecipes.filter(r => r.type === 'dolce') 
-        : allRecipes.filter(r => r.type !== 'dolce'); // Mostriamo primi e secondi
+        : allRecipes.filter(r => r.type !== 'dolce'); 
 
     renderManualSelectionList(listToShow);
     modal.classList.remove('hidden');
@@ -454,14 +470,12 @@ function filterManualSelection() {
     if (contextSelection.type === 'dessert') {
         filtered = recipesCache.filter(r => r.type === 'dolce' && r.name.toLowerCase().includes(query));
     } else {
-        // Cerca tra primi e secondi
         filtered = recipesCache.filter(r => r.type !== 'dolce' && r.name.toLowerCase().includes(query));
     }
     
     renderManualSelectionList(filtered);
 }
 
-// Questa funzione sostituisce selectManualDessert
 async function selectManualRecipe(id) {
     document.getElementById('select-dessert-modal').classList.add('hidden');
     
@@ -469,10 +483,9 @@ async function selectManualRecipe(id) {
         const res = await apiCall('/set-manual-dessert', 'POST', { recipeId: id });
         if(res.ok) renderMenuData(await res.json());
     } else {
-        // È un pasto (pranzo o cena)
         const res = await apiCall('/set-manual-meal', 'POST', { 
             day: contextSelection.day, 
-            type: contextSelection.type, // lunch o dinner
+            type: contextSelection.type, 
             recipeId: id 
         });
         if(res.ok) renderMenuData(await res.json());
