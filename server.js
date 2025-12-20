@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const cors = require('cors');
@@ -7,7 +7,6 @@ const path = require('path');
 const app = express();    
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.IP || "0.0.0.0";
-
 
 // CONFIGURAZIONE
 const SECRET_CODE = "0902"; 
@@ -19,19 +18,33 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const db = new sqlite3.Database(DB_FILE);
 
-// INIZIALIZZAZIONE DB
+// INIZIALIZZAZIONE E MIGRATION DB
 db.serialize(() => {
+    // Tabella Ricette Base
     db.run(`CREATE TABLE IF NOT EXISTS recipes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         type TEXT,
         servings INTEGER,
-        ingredients TEXT 
+        ingredients TEXT,
+        difficulty INTEGER DEFAULT 1,
+        procedure TEXT DEFAULT ''
     )`);
+
+    // Tabella Stato Menu
     db.run(`CREATE TABLE IF NOT EXISTS menu_state (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         data TEXT
     )`);
+
+    // MIGRATION: Aggiunta colonne se non esistono (per db esistenti)
+    const addCol = (colSql) => {
+        db.run(colSql, (err) => {
+            // Ignora errore se la colonna esiste già
+        });
+    };
+    addCol("ALTER TABLE recipes ADD COLUMN difficulty INTEGER DEFAULT 1");
+    addCol("ALTER TABLE recipes ADD COLUMN procedure TEXT DEFAULT ''");
 });
 
 // MIDDLEWARE AUTH
@@ -45,13 +58,53 @@ const checkAuth = (req, res, next) => {
 };
 
 // UTILS
+
+// Formatta stringhe (Es. "olio evo" -> "Olio Evo")
 const toTitleCase = (str) => str.replace(/\b\w/g, l => l.toUpperCase());
 
-const updateShoppingList = (list, name, qtyRaw, ratio) => {
+// Algoritmo Ponderato per la selezione casuale
+// Più bassa è la difficoltà, più alta è la probabilità di essere estratta.
+const getWeightedRandom = (items, usedIds) => {
+    // Filtra quelle già usate
+    const pool = items.filter(r => !usedIds.has(r.id));
+    
+    // Se non ci sono ricette disponibili, resetta o ritorna null
+    if (pool.length === 0) {
+        if (items.length === 0) return null;
+        // Se abbiamo esaurito le uniche, prendiamo da tutto il mazzo
+        // (potrebbe capitare se hai poche ricette)
+        return items[Math.floor(Math.random() * items.length)];
+    }
+
+    const weightedPool = [];
+    pool.forEach(item => {
+        // Scala 1-5: 
+        // Difficoltà 1 -> Peso 5 (Molto probabile)
+        // Difficoltà 5 -> Peso 1 (Poco probabile)
+        const weight = Math.max(1, 6 - (item.difficulty || 1)); 
+        
+        for(let k = 0; k < weight; k++) {
+            weightedPool.push(item);
+        }
+    });
+
+    const selected = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+    usedIds.add(selected.id);
+    return selected;
+};
+
+// --- LOGICA LISTA DELLA SPESA AVANZATA ---
+/* 
+   RawList: Lista calcolata matematicamente dal menu.
+   OldList: Stato precedente (per checkbox).
+   Overrides: Modifiche manuali alla quantità di un item calcolato.
+   Extras: Elementi aggiunti manualmente ex-novo.
+*/
+const updateShoppingItem = (list, name, qtyRaw, ratio) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
     
-    if (!list[key]) list[key] = { total: 0, isQb: false };
+    if (!list[key]) list[key] = { total: 0, isQb: false, originalName: name };
 
     if (isNaN(qtyNum)) {
         list[key].isQb = true;
@@ -60,79 +113,99 @@ const updateShoppingList = (list, name, qtyRaw, ratio) => {
     }
 };
 
-// Helper per formattare la lista con "Safety Uncheck"
-const formatList = (rawList, oldList = {}) => {
-    const finalObj = {};
-    Object.keys(rawList).sort().forEach(k => {
-        const item = rawList[k]; // item.total è il NUOVO numero calcolato
-        const titleKey = toTitleCase(k);
-        const oldItem = oldList[titleKey];
-        
-        // Calcolo la nuova quantità visualizzata
-        const newQtyDisplay = item.isQb ? "q.b." : Math.ceil(item.total);
+function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = {}) {
+    const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
+    const oldDessert = oldState.shoppingList ? (oldState.shoppingList.dessert || {}) : {};
+    
+    // Recuperiamo overrides e extras dallo stato precedente o inizializziamo
+    const overrides = oldState.shoppingOverrides || {};
+    const extras = oldState.shoppingExtras || [];
 
-        let isChecked = false;
-
-        // Se l'item esisteva ed era spuntato, facciamo il controllo di sicurezza
-        if (oldItem && oldItem.checked) {
-            if (item.isQb) {
-                // Se è "quanto basta" (es. sale, olio), manteniamo la spunta
-                isChecked = true;
-            } else {
-                // Recuperiamo la vecchia quantità numerica (togliendo eventuali "q.b." o testi)
-                const oldQtyNum = parseFloat(oldItem.qty);
-                
-                // Se la conversione fallisce o se la nuova quantità è MAGGIORE della vecchia
-                // togliamo la spunta per sicurezza.
-                if (!isNaN(oldQtyNum) && Math.ceil(item.total) <= oldQtyNum) {
-                    isChecked = true;
-                }
-                // ALTRIMENTI: isChecked rimane false (Reset di sicurezza)
-            }
-        }
-
-        finalObj[titleKey] = {
-            qty: newQtyDisplay,
-            checked: isChecked
-        };
-    });
-    return finalObj;
-};
-
-// Helper: Ricalcola lista della spesa 
-// Accetta oldShoppingList per preservare le spunte durante i ricalcoli
-function calculateShoppingList(menu, dessert, people, dessertPeople, oldShoppingList = { main: {}, dessert: {} }) {
     const listMainRaw = {};
     const listDessertRaw = {};
 
-    // 1. Calcola Pasti Principali
+    // 1. Calcolo matematico Pasti
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
             const meal = day[slot];
             if (meal) {
                 const mealPeople = meal.customServings ? meal.customServings : people;
                 const ratio = mealPeople / meal.servings;
-                
-                meal.ingredients.forEach(ing => {
-                    updateShoppingList(listMainRaw, ing.name, ing.quantity, ratio);
+                // Parsing ingredienti se necessario (sicurezza)
+                const ingredients = typeof meal.ingredients === 'string' ? JSON.parse(meal.ingredients) : meal.ingredients;
+                ingredients.forEach(ing => {
+                    updateShoppingItem(listMainRaw, ing.name, ing.quantity, ratio);
                 });
             }
         });
     });
 
-    // 2. Calcola Dolce
+    // 2. Calcolo matematico Dolce
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
-        dessert.ingredients.forEach(ing => {
-            updateShoppingList(listDessertRaw, ing.name, ing.quantity, dRatio);
+        const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
+        ingredients.forEach(ing => {
+            updateShoppingItem(listDessertRaw, ing.name, ing.quantity, dRatio);
         });
     }
 
+    // Funzione helper per formattare la lista finale
+    const formatList = (rawList, oldListRef, category) => {
+        const finalObj = {};
+        Object.keys(rawList).sort().forEach(k => {
+            const item = rawList[k];
+            const titleKey = toTitleCase(item.originalName);
+            
+            // Chiave univoca per gli override: "category_ItemName"
+            const overrideKey = `${category}_${titleKey}`;
+            
+            // Check esistenza override
+            const hasOverride = overrides.hasOwnProperty(overrideKey);
+            
+            // Determina Quantità visualizzata
+            let displayQty;
+            if (hasOverride) {
+                displayQty = overrides[overrideKey]; // Valore manuale
+            } else {
+                displayQty = item.isQb ? "q.b." : Math.ceil(item.total);
+            }
+
+            // Gestione Checkbox (Safety Uncheck)
+            const oldItem = oldListRef[titleKey];
+            let isChecked = false;
+            
+            if (oldItem && oldItem.checked) {
+                // Se c'è un override o è q.b., manteniamo la spunta
+                if (hasOverride || item.isQb) {
+                    isChecked = true;
+                } else {
+                    // Se la quantità è aumentata, togliamo la spunta per sicurezza
+                    const oldQtyNum = parseFloat(oldItem.qty);
+                    if (!isNaN(oldQtyNum) && Math.ceil(item.total) <= oldQtyNum) {
+                        isChecked = true;
+                    }
+                }
+            }
+
+            finalObj[titleKey] = {
+                qty: displayQty,
+                checked: isChecked,
+                isModified: hasOverride // Flag per CSS
+            };
+        });
+        return finalObj;
+    };
+
     return {
-        main: formatList(listMainRaw, oldShoppingList.main || {}),
-        dessert: formatList(listDessertRaw, oldShoppingList.dessert || {})
+        shoppingList: {
+            main: formatList(listMainRaw, oldMain, 'main'),
+            dessert: formatList(listDessertRaw, oldDessert, 'dessert')
+        },
+        shoppingOverrides: overrides,
+        shoppingExtras: extras // Array di oggetti { id, name, qty, checked }
     };
 }
+
 
 // --- ROTTE PUBLIC ---
 app.post('/api/login', (req, res) => {
@@ -144,24 +217,28 @@ app.post('/api/login', (req, res) => {
     }
 });
 
-// --- ROTTE PROTETTE ---
+// --- ROTTE RICETTE ---
 
-// GET RICETTE
 app.get('/api/recipes', checkAuth, (req, res) => {
     db.all("SELECT * FROM recipes ORDER BY name ASC", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        const recipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+        const recipes = rows.map(r => ({
+            ...r, 
+            ingredients: JSON.parse(r.ingredients)
+        }));
         res.json(recipes);
     });
 });
 
-// CREA RICETTA
 app.post('/api/recipes', checkAuth, (req, res) => {
-    const { name, type, servings, ingredients } = req.body;
+    // Aggiunti difficulty e procedure
+    const { name, type, servings, ingredients, difficulty, procedure } = req.body;
     const ingJson = JSON.stringify(ingredients);
+    const diffVal = difficulty || 1;
+    const procVal = procedure || "";
     
-    db.run(`INSERT INTO recipes (name, type, servings, ingredients) VALUES (?, ?, ?, ?)`, 
-        [name, type, servings, ingJson], 
+    db.run(`INSERT INTO recipes (name, type, servings, ingredients, difficulty, procedure) VALUES (?, ?, ?, ?, ?, ?)`, 
+        [name, type, servings, ingJson, diffVal, procVal], 
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ id: this.lastID, message: "Ricetta aggiunta" });
@@ -169,13 +246,14 @@ app.post('/api/recipes', checkAuth, (req, res) => {
     );
 });
 
-// AGGIORNA RICETTA
 app.put('/api/recipes/:id', checkAuth, (req, res) => {
-    const { name, type, servings, ingredients } = req.body;
+    const { name, type, servings, ingredients, difficulty, procedure } = req.body;
     const ingJson = JSON.stringify(ingredients);
+    const diffVal = difficulty || 1;
+    const procVal = procedure || "";
     
-    db.run(`UPDATE recipes SET name = ?, type = ?, servings = ?, ingredients = ? WHERE id = ?`,
-        [name, type, servings, ingJson, req.params.id],
+    db.run(`UPDATE recipes SET name = ?, type = ?, servings = ?, ingredients = ?, difficulty = ?, procedure = ? WHERE id = ?`,
+        [name, type, servings, ingJson, diffVal, procVal, req.params.id],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ message: "Ricetta aggiornata" });
@@ -183,7 +261,6 @@ app.put('/api/recipes/:id', checkAuth, (req, res) => {
     );
 });
 
-// ELIMINA RICETTA
 app.delete('/api/recipes/:id', checkAuth, (req, res) => {
     db.run(`DELETE FROM recipes WHERE id = ?`, req.params.id, function(err) {
         if (err) return res.status(500).json({ error: err.message });
@@ -191,7 +268,8 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
     });
 });
 
-// GENERA MENU COMPLETO
+// --- ROTTE MENU ---
+
 app.post('/api/generate-menu', checkAuth, (req, res) => {
     const { people } = req.body;
     
@@ -207,37 +285,34 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
         const weekMenu = [];
         const usedIds = new Set(); 
 
-        const getUniqueRandom = (sourceArray) => {
-            if (sourceArray.length === 0) return null;
-            let available = sourceArray.filter(r => !usedIds.has(r.id));
-            if (available.length === 0) available = sourceArray; 
-            
-            const selected = available[Math.floor(Math.random() * available.length)];
-            usedIds.add(selected.id);
-            return selected;
-        };
-
         for (let i = 0; i < 7; i++) {
             const dayMenu = { day: i + 1, lunch: null, dinner: null };
+            // Alternanza pranzo/cena
             if (i % 2 === 0) {
-                dayMenu.lunch = getUniqueRandom(primi);
-                dayMenu.dinner = getUniqueRandom(secondi);
+                dayMenu.lunch = getWeightedRandom(primi, usedIds);
+                dayMenu.dinner = getWeightedRandom(secondi, usedIds);
             } else {
-                dayMenu.lunch = getUniqueRandom(secondi);
-                dayMenu.dinner = getUniqueRandom(primi);
+                dayMenu.lunch = getWeightedRandom(secondi, usedIds);
+                dayMenu.dinner = getWeightedRandom(primi, usedIds);
             }
             weekMenu.push(dayMenu);
         }
 
-        const selectedDessert = dolci.length > 0 
-            ? dolci[Math.floor(Math.random() * dolci.length)] 
-            : null;
-
+        const selectedDessert = getWeightedRandom(dolci, new Set()); // Set vuoto per il dolce indipendente
         const dessertPeople = people;
 
-        // Nuova generazione: non passiamo oldList perché è un menu completamente nuovo
-        const shoppingList = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople);
-        const stateData = { menu: weekMenu, shoppingList, dessert: selectedDessert, people, dessertPeople };
+        // Reset completo: passiamo un oggetto vuoto come "oldState"
+        const calculated = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople, {});
+        
+        const stateData = { 
+            menu: weekMenu, 
+            shoppingList: calculated.shoppingList, 
+            shoppingOverrides: calculated.shoppingOverrides,
+            shoppingExtras: calculated.shoppingExtras,
+            dessert: selectedDessert, 
+            people, 
+            dessertPeople 
+        };
         
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
             if (e) console.error(e);
@@ -246,7 +321,6 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
     });
 });
 
-// LEGGI ULTIMO MENU
 app.get('/api/last-menu', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -255,190 +329,65 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
     });
 });
 
-// --- TOGGLE SHOPPING ITEM (NUOVO) ---
+// --- GESTIONE SPESA (Azioni) ---
+
+// 1. Toggle Checkbox (Server-side persist)
 app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
-    const { category, item } = req.body; // category: 'main' o 'dessert', item: 'Nome Ingrediente'
+    const { category, item, isExtra } = req.body; 
     
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
         
-        // Controlla se l'elemento esiste nella lista
-        if (currentState.shoppingList[category] && currentState.shoppingList[category][item]) {
-            // Inverti lo stato checked
-            currentState.shoppingList[category][item].checked = !currentState.shoppingList[category][item].checked;
-            
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
+        if (isExtra) {
+            // Gestione Extra
+            const extraItem = currentState.shoppingExtras.find(e => e.name === item);
+            if(extraItem) extraItem.checked = !extraItem.checked;
         } else {
-            res.status(404).json({ error: "Ingrediente non trovato" });
+            // Gestione Main/Dessert
+            if (currentState.shoppingList[category] && currentState.shoppingList[category][item]) {
+                currentState.shoppingList[category][item].checked = !currentState.shoppingList[category][item].checked;
+            }
         }
+            
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+            res.json(currentState);
+        });
     });
 });
 
-// --- Aggiorna porzioni singolo pasto ---
-app.post('/api/update-meal-servings', checkAuth, (req, res) => {
-    const { day, type, servings } = req.body;
+// 2. Modifica Quantità (Override)
+app.post('/api/update-shopping-qty', checkAuth, (req, res) => {
+    const { category, item, newQty } = req.body; // item è il nome (es "Sale")
     
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
-        const dayIndex = day - 1;
         
-        if(currentState.menu[dayIndex] && currentState.menu[dayIndex][type]) {
-            currentState.menu[dayIndex][type].customServings = parseInt(servings);
-            
-            // Passiamo la vecchia lista per preservare le spunte
-            currentState.shoppingList = calculateShoppingList(
-                currentState.menu, 
-                currentState.dessert, 
-                currentState.people, 
-                currentState.dessertPeople,
-                currentState.shoppingList // <--- Passiamo lo stato precedente
-            );
-            
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
-        } else {
-            res.status(400).json({ error: "Pasto non trovato" });
-        }
-    });
-});
-
-// --- Rigenera Singolo Piatto ---
-app.post('/api/regenerate-meal', checkAuth, (req, res) => {
-    const { day, type } = req.body;
-
-    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
-        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        // Creiamo la chiave per l'override: category_ItemName
+        const overrideKey = `${category}_${item}`;
         
-        let currentState = JSON.parse(rowState.data);
-        const dayIndex = day - 1;
-        const currentMeal = currentState.menu[dayIndex][type];
-        
-        if(!currentMeal) return res.status(400).json({error: "Pasto vuoto"});
+        // Se non esiste l'oggetto overrides, crealo
+        if (!currentState.shoppingOverrides) currentState.shoppingOverrides = {};
 
-        const targetType = currentMeal.type;
+        // Salviamo il nuovo valore
+        currentState.shoppingOverrides[overrideKey] = newQty;
 
-        db.all("SELECT * FROM recipes WHERE type = ?", [targetType], (err, rows) => {
-            if (rows.length === 0) return res.json(currentState);
-
-            const allOptions = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-            let pool = allOptions.filter(r => r.id !== currentMeal.id);
-            if(pool.length === 0) pool = allOptions; 
-
-            const newRecipe = pool[Math.floor(Math.random() * pool.length)];
-            
-            if(currentMeal.customServings) {
-                newRecipe.customServings = currentMeal.customServings;
-            }
-
-            currentState.menu[dayIndex][type] = newRecipe;
-            currentState.shoppingList = calculateShoppingList(
-                currentState.menu, 
-                currentState.dessert, 
-                currentState.people, 
-                currentState.dessertPeople,
-                currentState.shoppingList // Preserva spunte
-            );
-
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
-        });
-    });
-});
-
-// --- Imposta Piatto Manuale ---
-app.post('/api/set-manual-meal', checkAuth, (req, res) => {
-    const { day, type, recipeId } = req.body;
-    
-    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
-        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
-        let currentState = JSON.parse(rowState.data);
-        const dayIndex = day - 1;
-
-        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
-            if(err || !row) return res.status(400).json({error: "Ricetta non trovata"});
-            
-            const newRecipe = {...row, ingredients: JSON.parse(row.ingredients)};
-            const oldMeal = currentState.menu[dayIndex][type];
-
-            if(oldMeal && oldMeal.customServings) {
-                newRecipe.customServings = oldMeal.customServings;
-            }
-
-            currentState.menu[dayIndex][type] = newRecipe;
-            currentState.shoppingList = calculateShoppingList(
-                currentState.menu, 
-                currentState.dessert, 
-                currentState.people, 
-                currentState.dessertPeople,
-                currentState.shoppingList // Preserva spunte
-            );
-
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
-        });
-    });
-});
-
-// RIGENERA DOLCE
-app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
-    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
-        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
-        
-        let currentState = JSON.parse(rowState.data);
-        
-        db.all("SELECT * FROM recipes WHERE type = 'dolce'", [], (err, rows) => {
-            if (rows.length === 0) return res.json(currentState);
-            
-            const allDesserts = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-            let options = allDesserts;
-            
-            if (currentState.dessert && allDesserts.length > 1) {
-                options = allDesserts.filter(d => d.id !== currentState.dessert.id);
-            }
-            
-            currentState.dessert = options[Math.floor(Math.random() * options.length)];
-            if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
-
-            currentState.shoppingList = calculateShoppingList(
-                currentState.menu, 
-                currentState.dessert, 
-                currentState.people, 
-                currentState.dessertPeople,
-                currentState.shoppingList // Preserva spunte
-            );
-
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
-        });
-    });
-});
-
-// AGGIORNA PORZIONI DOLCE
-app.post('/api/update-dessert-servings', checkAuth, (req, res) => {
-    const { servings } = req.body;
-    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
-        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
-        
-        let currentState = JSON.parse(rowState.data);
-        currentState.dessertPeople = parseInt(servings);
-        
-        currentState.shoppingList = calculateShoppingList(
+        // Ricalcoliamo la lista applicando l'override
+        const recalculated = calculateShoppingList(
             currentState.menu, 
             currentState.dessert, 
             currentState.people, 
             currentState.dessertPeople,
-            currentState.shoppingList // Preserva spunte
+            currentState // Passiamo tutto lo stato come "old"
         );
+
+        // Aggiorniamo lo stato
+        currentState.shoppingList = recalculated.shoppingList;
+        currentState.shoppingOverrides = recalculated.shoppingOverrides;
+        // gli extras non cambiano qui
 
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
             res.json(currentState);
@@ -446,59 +395,186 @@ app.post('/api/update-dessert-servings', checkAuth, (req, res) => {
     });
 });
 
-// IMPOSTA DOLCE MANUALE
-app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
-    const { recipeId } = req.body;
+// 3. Aggiungi Extra
+app.post('/api/add-shopping-extra', checkAuth, (req, res) => {
+    const { name, qty } = req.body;
+    
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
+        if (!currentState.shoppingExtras) currentState.shoppingExtras = [];
 
-        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
-            if(err || !row) return res.status(400).json({error: "Ricetta non trovata"});
-            
-            const newDessert = {...row, ingredients: JSON.parse(row.ingredients)};
-            currentState.dessert = newDessert;
-            if(!currentState.dessertPeople) currentState.dessertPeople = currentState.people;
-            
-            currentState.shoppingList = calculateShoppingList(
-                currentState.menu, 
-                currentState.dessert, 
-                currentState.people, 
-                currentState.dessertPeople,
-                currentState.shoppingList // Preserva spunte
-            );
+        currentState.shoppingExtras.push({
+            id: Date.now(), // ID univoco semplice
+            name: toTitleCase(name),
+            qty: qty,
+            checked: false
+        });
 
-            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
-                res.json(currentState);
-            });
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+            res.json(currentState);
         });
     });
 });
 
-// EXPORT JSON
+// 4. Rimuovi Extra
+app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
+    const { id } = req.body;
+    
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        if (currentState.shoppingExtras) {
+            currentState.shoppingExtras = currentState.shoppingExtras.filter(e => e.id !== id);
+        }
+
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+            res.json(currentState);
+        });
+    });
+});
+
+// --- AGGIORNAMENTI MENU (Porzioni, Rigenerazioni) ---
+// Nota: Queste funzioni devono ora richiamare calculateShoppingList passando lo stato completo
+
+const updateStateAndRespond = (res, newState) => {
+    // Ricalcolo sempre la lista della spesa prima di salvare
+    const recalculated = calculateShoppingList(
+        newState.menu,
+        newState.dessert,
+        newState.people,
+        newState.dessertPeople,
+        newState // Passa lo stato corrente per preservare overrides/extras/checkbox
+    );
+
+    newState.shoppingList = recalculated.shoppingList;
+    newState.shoppingOverrides = recalculated.shoppingOverrides;
+    newState.shoppingExtras = recalculated.shoppingExtras;
+
+    db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(newState)], () => {
+        res.json(newState);
+    });
+};
+
+app.post('/api/update-meal-servings', checkAuth, (req, res) => {
+    const { day, type, servings } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        if(s.menu[day-1] && s.menu[day-1][type]) {
+            s.menu[day-1][type].customServings = parseInt(servings);
+            updateStateAndRespond(res, s);
+        }
+    });
+});
+
+app.post('/api/regenerate-meal', checkAuth, (req, res) => {
+    const { day, type } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        const currentMeal = s.menu[day-1][type];
+        if(!currentMeal) return res.status(400).json({error: "Empty"});
+
+        db.all("SELECT * FROM recipes WHERE type = ?", [currentMeal.type], (err, rows) => {
+            const all = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+            // Weighted random anche qui per coerenza
+            const pool = all.filter(r => r.id !== currentMeal.id);
+            const newRecipe = getWeightedRandom(pool, new Set()) || currentMeal;
+            
+            if(currentMeal.customServings) newRecipe.customServings = currentMeal.customServings;
+            s.menu[day-1][type] = newRecipe;
+            updateStateAndRespond(res, s);
+        });
+    });
+});
+
+app.post('/api/set-manual-meal', checkAuth, (req, res) => {
+    const { day, type, recipeId } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        
+        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
+            if(!row) return res.status(400).json({error: "No Recipe"});
+            const newR = {...row, ingredients: JSON.parse(row.ingredients)};
+            const old = s.menu[day-1][type];
+            if(old && old.customServings) newR.customServings = old.customServings;
+            
+            s.menu[day-1][type] = newR;
+            updateStateAndRespond(res, s);
+        });
+    });
+});
+
+app.post('/api/regenerate-dessert', checkAuth, (req, res) => {
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        db.all("SELECT * FROM recipes WHERE type = 'dolce'", [], (err, rows) => {
+            const all = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+            const pool = s.dessert ? all.filter(r => r.id !== s.dessert.id) : all;
+            s.dessert = getWeightedRandom(pool, new Set());
+            if(!s.dessertPeople) s.dessertPeople = s.people;
+            updateStateAndRespond(res, s);
+        });
+    });
+});
+
+app.post('/api/update-dessert-servings', checkAuth, (req, res) => {
+    const { servings } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        s.dessertPeople = parseInt(servings);
+        updateStateAndRespond(res, s);
+    });
+});
+
+app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
+    const { recipeId } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Err" });
+        let s = JSON.parse(rowState.data);
+        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, row) => {
+            if(!row) return res.status(400).json({error: "No Recipe"});
+            s.dessert = {...row, ingredients: JSON.parse(row.ingredients)};
+            if(!s.dessertPeople) s.dessertPeople = s.people;
+            updateStateAndRespond(res, s);
+        });
+    });
+});
+
+// IMPORT / EXPORT (Aggiornati per difficulty e procedure)
 app.get('/api/export-json', checkAuth, (req, res) => {
-    db.all("SELECT name, type, servings, ingredients FROM recipes", [], (err, rows) => {
+    db.all("SELECT name, type, servings, ingredients, difficulty, procedure FROM recipes", [], (err, rows) => {
         if (err) return res.status(500).json({ error: "Errore export" });
-        const cleanData = rows.map(r => ({ ...r, ingredients: JSON.parse(r.ingredients) }));
+        const cleanData = rows.map(r => ({ 
+            ...r, 
+            ingredients: JSON.parse(r.ingredients) 
+        }));
         res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', 'attachment; filename=ricette_backup.json');
+        res.setHeader('Content-Disposition', 'attachment; filename=ricettario_backup.json');
         res.json(cleanData);
     });
 });
 
-// IMPORT JSON
 app.post('/api/import-json', checkAuth, (req, res) => {
     const recipes = req.body;
     if (!Array.isArray(recipes)) return res.status(400).json({ error: "JSON non valido" });
 
-    const stmt = db.prepare(`INSERT INTO recipes (name, type, servings, ingredients) VALUES (?, ?, ?, ?)`);
+    const stmt = db.prepare(`INSERT INTO recipes (name, type, servings, ingredients, difficulty, procedure) VALUES (?, ?, ?, ?, ?, ?)`);
     db.serialize(() => {
         db.run("BEGIN TRANSACTION");
         recipes.forEach(r => {
             if(r.name && r.type) {
                 const ingString = typeof r.ingredients === 'object' ? JSON.stringify(r.ingredients) : r.ingredients;
-                stmt.run(r.name, r.type, r.servings || 2, ingString);
+                // Fallback valori se mancano nel json importato
+                const diff = r.difficulty || 1;
+                const proc = r.procedure || "";
+                stmt.run(r.name, r.type, r.servings || 2, ingString, diff, proc);
             }
         });
         db.run("COMMIT", (err) => {

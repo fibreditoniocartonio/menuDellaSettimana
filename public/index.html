@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
@@ -12,42 +12,42 @@
     <div id="view-login" class="view active">
         <div class="login-card">
             <h1>👨‍🍳 Cucina</h1>
-            <p>Inserisci il pin di quattro cifre</p>
-            <p>(data del primo bacio)</p>
-            <input type="password" id="access-code" placeholder="****" inputmode="numeric">
-            <button class="btn-primary full-width" onclick="login()">Entra</button>
-            <p id="login-error" class="error"></p>
+            <p style="color:var(--text-light)">Il tuo assistente personale</p>
+            <br>
+            <input type="password" id="access-code" placeholder="Inserisci PIN (****)" inputmode="numeric" style="text-align:center; letter-spacing: 5px; font-weight:bold;">
+            <button class="btn-primary full-width" onclick="login()" style="margin-top:20px;">Entra</button>
+            <p id="login-error" style="color:var(--accent); font-weight:bold; margin-top:10px;"></p>
         </div>
     </div>
 
     <!-- HEADER FISSO -->
     <nav id="navbar" class="hidden">
         <span id="nav-title">Dashboard</span>
-        <button class="btn-text" onclick="logout()">Esci</button>
+        <button class="btn-text" onclick="logout()" style="color:var(--accent)">Esci</button>
     </nav>
 
     <!-- DASHBOARD -->
     <div id="view-dashboard" class="view hidden padded">
         <div class="grid-menu">
             <div class="card-action" onclick="loadLastMenu()">
-                <div class="icon">📅</div>
+                <div class="icon" style="color: var(--primary)">📅</div>
                 <h3>Menu Attuale</h3>
-                <p>Vedi cosa si mangia</p>
+                <p>Vedi la settimana</p>
             </div>
             <div class="card-action" onclick="showGenerateModal()">
-                <div class="icon">⚡</div>
+                <div class="icon" style="color: var(--accent)">⚡</div>
                 <h3>Nuovo Menu</h3>
-                <p>Genera la settimana</p>
+                <p>Genera in un click</p>
             </div>
             <div class="card-action" onclick="loadRecipes()">
-                <div class="icon">📖</div>
+                <div class="icon" style="color: #10b981">📖</div>
                 <h3>Ricettario</h3>
-                <p>Gestisci i piatti</p>
+                <p>I tuoi piatti</p>
             </div>
             <div class="card-action secondary" onclick="showBackupModal()">
                 <div class="icon">💾</div>
-                <h3>Backup / Ripristino</h3>
-                <p>Gestione dati</p>
+                <h3>Opzioni</h3>
+                <p>Backup / Ripristino</p>
             </div>
         </div>
         <input type="file" id="json-file" class="hidden" accept=".json" onchange="importJSON(this)">
@@ -56,16 +56,16 @@
     <!-- VISTA RICETTE -->
     <div id="view-recipes" class="view hidden padded">
         <div class="toolbar">
-            <button class="btn-secondary" onclick="showView('view-dashboard')">⬅ Indietro</button>
-            <button class="btn-success" onclick="openRecipeModal()">+ Nuova</button>
+            <button class="btn-secondary btn-small" onclick="showView('view-dashboard')">⬅ Indietro</button>
+            <button class="btn-success btn-small" onclick="openRecipeModal()">+ Nuova Ricetta</button>
         </div>
         <input type="text" id="search-recipe" placeholder="🔍 Cerca ricetta..." onkeyup="filterRecipes()">
-        <div id="recipes-list" class="list-container"></div>
+        <div id="recipes-list" style="margin-top:20px;"></div>
     </div>
 
     <!-- VISTA MENU & SPESA -->
     <div id="view-menu" class="view hidden padded">
-        <button class="btn-secondary" onclick="showView('view-dashboard')">⬅ Torna alla Home</button>
+        <button class="btn-secondary btn-small full-width" onclick="showView('view-dashboard')" style="margin-bottom:10px;">⬅ Torna alla Home</button>
         
         <div class="tab-header">
             <button class="tab-btn active" onclick="switchTab('tab-menu')">Menu</button>
@@ -80,7 +80,6 @@
 
         <!-- Tab Spesa -->
         <div id="tab-shopping" class="tab-content">
-            <div class="info-box">Clicca sugli ingredienti per spuntarli.</div>
             <div id="shopping-container"></div>
         </div>
     </div>
@@ -92,12 +91,17 @@
                 <h3 id="modal-title">Ricetta</h3>
                 <span class="close-btn" onclick="closeRecipeModal()">&times;</span>
             </div>
+            
             <input type="hidden" id="rec-id">
-            <label>Nome Piatto</label>
-            <input type="text" id="rec-name" placeholder="Es. Carbonara">
+            
+            <div style="margin-top:20px;">
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Nome Piatto</label>
+                <input type="text" id="rec-name" placeholder="Es. Carbonara">
+            </div>
+
             <div class="row">
                 <div class="col">
-                    <label>Tipo</label>
+                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tipo</label>
                     <select id="rec-type">
                         <option value="primo">🍝 Primo</option>
                         <option value="secondo">🥩 Secondo</option>
@@ -105,55 +109,95 @@
                     </select>
                 </div>
                 <div class="col">
-                    <label>Persone</label>
+                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Persone</label>
                     <input type="number" id="rec-servings" value="2">
                 </div>
             </div>
-            <label>Ingredienti</label>
-            <div id="ingredients-list"></div>
-            <button class="btn-small btn-secondary" onclick="addIngredientRow()">+ Aggiungi Ingrediente</button>
-            <div class="modal-footer">
-                <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none;">Elimina</button>
-                <button class="btn-primary" onclick="saveRecipe()">Salva</button>
+
+            <!-- NUOVO CAMPO DIFFICOLTA -->
+            <div style="margin-top:5px;">
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Difficoltà (usata per la frequenza)</label>
+                <select id="rec-difficulty">
+                    <option value="1">⭐ Facilissimo (Molto Frequente)</option>
+                    <option value="2">⭐⭐ Facile</option>
+                    <option value="3">⭐⭐⭐ Medio</option>
+                    <option value="4">⭐⭐⭐⭐ Impegnativo</option>
+                    <option value="5">⭐⭐⭐⭐⭐ Chef (Raro)</option>
+                </select>
             </div>
+
+            <!-- INGREDIENTI -->
+            <label style="font-size:0.9rem; font-weight:bold; display:block; margin: 15px 0 5px;">Ingredienti</label>
+            <div id="ingredients-list"></div>
+            <button class="btn-small btn-secondary full-width" onclick="addIngredientRow()" style="margin-bottom:20px; border-style:dashed;">+ Aggiungi Ingrediente</button>
+
+            <!-- NUOVO CAMPO PROCEDURA -->
+            <label style="font-size:0.9rem; font-weight:bold; display:block; margin-bottom:5px;">Procedimento</label>
+            <textarea id="rec-procedure" placeholder="Scrivi qui come si prepara..."></textarea>
+
+            <div class="modal-footer">
+                <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none; margin-right:auto;">Elimina</button>
+                <button class="btn-primary" onclick="saveRecipe()">Salva Ricetta</button>
+            </div>
+            <div style="height:20px;"></div> <!-- Spacer per mobile -->
         </div>
     </div>
 
     <!-- MODAL GENERA -->
     <div id="generate-modal" class="modal hidden">
         <div class="modal-content small">
-            <h3>Genera Menu</h3>
-            <p>Per quante persone cucini?</p>
-            <input type="number" id="gen-people" value="2" style="font-size: 2rem; text-align: center; width: 80px;">
-            <div class="modal-footer">
+            <h3 class="text-center">Genera Menu</h3>
+            <p class="text-center" style="color:var(--text-light)">Per quante persone cucini solitamente?</p>
+            <div style="text-align:center; margin: 20px 0;">
+                <input type="number" id="gen-people" value="2" style="font-size: 2rem; text-align: center; width: 100px; border:none; border-bottom: 2px solid var(--primary); background: transparent; border-radius:0;">
+            </div>
+            <div class="modal-footer" style="justify-content: center;">
                 <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
-                <button class="btn-primary" onclick="generateMenu()">Vai!</button>
+                <button class="btn-primary" onclick="generateMenu()">Genera Ora!</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL BACKUP -->
+<!-- MODAL OPZIONI -->
     <div id="backup-modal" class="modal hidden">
         <div class="modal-content small text-center">
-            <h3>Gestione Dati</h3>
-            <div class="col" style="display:flex; flex-direction:column; gap:10px; margin-top:20px;">
+            <h3>Opzioni</h3>
+
+            <!-- SELETTORE TEMA -->
+            <div style="text-align:left; margin-bottom:20px;">
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tema Grafico</label>
+                <select id="theme-selector" onchange="changeTheme(this.value)">
+                    <option value="auto">✨ Automatico (Stagionale)</option>
+                    <option value="theme-winter">❄️ Inverno (Default)</option>
+                    <option value="theme-christmas">🎄 Natale</option>
+                    <option value="theme-valentine">💘 San Valentino</option>
+                    <option value="theme-spring">🌸 Primavera</option>
+                    <option value="theme-summer">🌊 Estate</option>
+                    <option value="theme-autumn">🍂 Autunno</option>
+                    <option value="theme-halloween">🎃 Halloween</option>
+                </select>
+            </div>
+
+            <hr style="border:0; border-top:1px dashed var(--border); margin: 20px 0;">
+
+            <p style="font-size:0.9rem; color:var(--text-light)">Gestione Dati</p>
+            <div class="col" style="display:flex; flex-direction:column; gap:10px;">
                 <button class="btn-primary full-width" onclick="exportJSON()">⬇️ Scarica Backup</button>
-                <button class="btn-warning full-width" onclick="document.getElementById('json-file').click()">⬆️ Carica Backup</button>
-                <button class="btn-secondary full-width" onclick="document.getElementById('backup-modal').classList.add('hidden')">Chiudi</button>
+                <button class="btn-secondary full-width" onclick="document.getElementById('json-file').click()">⬆️ Carica Backup</button>
+                <button class="btn-text full-width" onclick="document.getElementById('backup-modal').classList.add('hidden')">Chiudi</button>
             </div>
         </div>
     </div>
 
-    <!-- MODAL SELEZIONE MANUALE (Unificato per Pasti e Dolci) -->
+    <!-- MODAL SELEZIONE MANUALE -->
     <div id="select-dessert-modal" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Scegli Ricetta</h3>
                 <span class="close-btn" onclick="document.getElementById('select-dessert-modal').classList.add('hidden')">&times;</span>
             </div>
-            <!-- Barra di ricerca generica che attiva il filtro manuale -->
-            <input type="text" id="search-dessert" placeholder="🔍 Cerca..." onkeyup="filterManualSelection()">
-            <div id="dessert-selection-list"></div>
+            <input type="text" id="search-dessert" placeholder="🔍 Cerca piatto..." onkeyup="filterManualSelection()">
+            <div id="dessert-selection-list" style="margin-top:15px;"></div>
         </div>
     </div>
 
