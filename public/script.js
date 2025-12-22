@@ -616,7 +616,7 @@ async function clearManualList() {
 
 async function editShoppingQty(category, itemName, currentQty) {
     const newQty = await showPrompt(`Modifica quantità per ${itemName}:`, currentQty);
-    if (newQty === null || newQty === currentQty) return; 
+    if (newQty === false || newQty === null || newQty === currentQty) return; 
 
     const res = await apiCall('/update-shopping-qty', 'POST', { category, item: itemName, newQty });
     if(res.ok) renderMenuData(await res.json());
