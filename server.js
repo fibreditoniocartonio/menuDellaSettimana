@@ -63,26 +63,17 @@ const checkAuth = (req, res, next) => {
 const toTitleCase = (str) => str.replace(/\b\w/g, l => l.toUpperCase());
 
 // Algoritmo Ponderato per la selezione casuale
-// Più bassa è la difficoltà, più alta è la probabilità di essere estratta.
 const getWeightedRandom = (items, usedIds) => {
-    // Filtra quelle già usate
     const pool = items.filter(r => !usedIds.has(r.id));
     
-    // Se non ci sono ricette disponibili, resetta o ritorna null
     if (pool.length === 0) {
         if (items.length === 0) return null;
-        // Se abbiamo esaurito le uniche, prendiamo da tutto il mazzo
-        // (potrebbe capitare se hai poche ricette)
         return items[Math.floor(Math.random() * items.length)];
     }
 
     const weightedPool = [];
     pool.forEach(item => {
-        // Scala 1-5: 
-        // Difficoltà 1 -> Peso 5 (Molto probabile)
-        // Difficoltà 5 -> Peso 1 (Poco probabile)
         const weight = Math.max(1, 6 - (item.difficulty || 1)); 
-        
         for(let k = 0; k < weight; k++) {
             weightedPool.push(item);
         }
@@ -95,10 +86,8 @@ const getWeightedRandom = (items, usedIds) => {
 
 // --- LOGICA LISTA DELLA SPESA AVANZATA ---
 /* 
-   RawList: Lista calcolata matematicamente dal menu.
-   OldList: Stato precedente (per checkbox).
-   Overrides: Modifiche manuali alla quantità di un item calcolato.
-   Extras: Elementi aggiunti manualmente ex-novo.
+   MODIFICA: Unita la lista Dolce alla lista Main.
+   Tutti gli ingredienti finiscono in 'main'.
 */
 const updateShoppingItem = (list, name, qtyRaw, ratio) => {
     const key = name.trim().toLowerCase();
@@ -114,38 +103,36 @@ const updateShoppingItem = (list, name, qtyRaw, ratio) => {
 };
 
 function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = {}) {
+    // Recuperiamo lo stato precedente della lista 'main' (unica lista ora)
     const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
-    const oldDessert = oldState.shoppingList ? (oldState.shoppingList.dessert || {}) : {};
     
-    // Recuperiamo overrides e extras dallo stato precedente o inizializziamo
     const overrides = oldState.shoppingOverrides || {};
     const extras = oldState.shoppingExtras || [];
 
-    const listMainRaw = {};
-    const listDessertRaw = {};
+    // Usiamo un unico accumulatore per tutto
+    const listCombinedRaw = {};
 
-    // 1. Calcolo matematico Pasti
+    // 1. Calcolo matematico Pasti (Pranzo/Cena)
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
             const meal = day[slot];
             if (meal) {
                 const mealPeople = meal.customServings ? meal.customServings : people;
                 const ratio = mealPeople / meal.servings;
-                // Parsing ingredienti se necessario (sicurezza)
                 const ingredients = typeof meal.ingredients === 'string' ? JSON.parse(meal.ingredients) : meal.ingredients;
                 ingredients.forEach(ing => {
-                    updateShoppingItem(listMainRaw, ing.name, ing.quantity, ratio);
+                    updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, ratio);
                 });
             }
         });
     });
 
-    // 2. Calcolo matematico Dolce
+    // 2. Calcolo matematico Dolce (Aggiunto alla stessa lista)
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
         ingredients.forEach(ing => {
-            updateShoppingItem(listDessertRaw, ing.name, ing.quantity, dRatio);
+            updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, dRatio);
         });
     }
 
@@ -156,30 +143,25 @@ function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = 
             const item = rawList[k];
             const titleKey = toTitleCase(item.originalName);
             
-            // Chiave univoca per gli override: "category_ItemName"
+            // Chiave univoca per gli override: "category_ItemName" (category sarà sempre 'main')
             const overrideKey = `${category}_${titleKey}`;
             
-            // Check esistenza override
             const hasOverride = overrides.hasOwnProperty(overrideKey);
             
-            // Determina Quantità visualizzata
             let displayQty;
             if (hasOverride) {
-                displayQty = overrides[overrideKey]; // Valore manuale
+                displayQty = overrides[overrideKey];
             } else {
                 displayQty = item.isQb ? "q.b." : Math.ceil(item.total);
             }
 
-            // Gestione Checkbox (Safety Uncheck)
             const oldItem = oldListRef[titleKey];
             let isChecked = false;
             
             if (oldItem && oldItem.checked) {
-                // Se c'è un override o è q.b., manteniamo la spunta
                 if (hasOverride || item.isQb) {
                     isChecked = true;
                 } else {
-                    // Se la quantità è aumentata, togliamo la spunta per sicurezza
                     const oldQtyNum = parseFloat(oldItem.qty);
                     if (!isNaN(oldQtyNum) && Math.ceil(item.total) <= oldQtyNum) {
                         isChecked = true;
@@ -190,7 +172,7 @@ function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = 
             finalObj[titleKey] = {
                 qty: displayQty,
                 checked: isChecked,
-                isModified: hasOverride // Flag per CSS
+                isModified: hasOverride
             };
         });
         return finalObj;
@@ -198,11 +180,11 @@ function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = 
 
     return {
         shoppingList: {
-            main: formatList(listMainRaw, oldMain, 'main'),
-            dessert: formatList(listDessertRaw, oldDessert, 'dessert')
+            // Unica categoria 'main' che contiene tutto
+            main: formatList(listCombinedRaw, oldMain, 'main') 
         },
         shoppingOverrides: overrides,
-        shoppingExtras: extras // Array di oggetti { id, name, qty, checked }
+        shoppingExtras: extras 
     };
 }
 
@@ -231,7 +213,6 @@ app.get('/api/recipes', checkAuth, (req, res) => {
 });
 
 app.post('/api/recipes', checkAuth, (req, res) => {
-    // Aggiunti difficulty e procedure
     const { name, type, servings, ingredients, difficulty, procedure } = req.body;
     const ingJson = JSON.stringify(ingredients);
     const diffVal = difficulty || 1;
@@ -287,7 +268,6 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
 
         for (let i = 0; i < 7; i++) {
             const dayMenu = { day: i + 1, lunch: null, dinner: null };
-            // Alternanza pranzo/cena
             if (i % 2 === 0) {
                 dayMenu.lunch = getWeightedRandom(primi, usedIds);
                 dayMenu.dinner = getWeightedRandom(secondi, usedIds);
@@ -298,10 +278,9 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             weekMenu.push(dayMenu);
         }
 
-        const selectedDessert = getWeightedRandom(dolci, new Set()); // Set vuoto per il dolce indipendente
+        const selectedDessert = getWeightedRandom(dolci, new Set()); 
         const dessertPeople = people;
 
-        // Reset completo: passiamo un oggetto vuoto come "oldState"
         const calculated = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople, {});
         
         const stateData = { 
@@ -331,7 +310,6 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
 
 // --- GESTIONE SPESA (Azioni) ---
 
-// 1. Toggle Checkbox (Server-side persist)
 app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
     const { category, item, isExtra } = req.body; 
     
@@ -341,11 +319,10 @@ app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
         let currentState = JSON.parse(rowState.data);
         
         if (isExtra) {
-            // Gestione Extra
             const extraItem = currentState.shoppingExtras.find(e => e.name === item);
             if(extraItem) extraItem.checked = !extraItem.checked;
         } else {
-            // Gestione Main/Dessert
+            // Nota: category sarà 'main'
             if (currentState.shoppingList[category] && currentState.shoppingList[category][item]) {
                 currentState.shoppingList[category][item].checked = !currentState.shoppingList[category][item].checked;
             }
@@ -357,37 +334,29 @@ app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
     });
 });
 
-// 2. Modifica Quantità (Override)
 app.post('/api/update-shopping-qty', checkAuth, (req, res) => {
-    const { category, item, newQty } = req.body; // item è il nome (es "Sale")
+    const { category, item, newQty } = req.body; 
     
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
         
-        // Creiamo la chiave per l'override: category_ItemName
         const overrideKey = `${category}_${item}`;
         
-        // Se non esiste l'oggetto overrides, crealo
         if (!currentState.shoppingOverrides) currentState.shoppingOverrides = {};
-
-        // Salviamo il nuovo valore
         currentState.shoppingOverrides[overrideKey] = newQty;
 
-        // Ricalcoliamo la lista applicando l'override
         const recalculated = calculateShoppingList(
             currentState.menu, 
             currentState.dessert, 
             currentState.people, 
             currentState.dessertPeople,
-            currentState // Passiamo tutto lo stato come "old"
+            currentState 
         );
 
-        // Aggiorniamo lo stato
         currentState.shoppingList = recalculated.shoppingList;
         currentState.shoppingOverrides = recalculated.shoppingOverrides;
-        // gli extras non cambiano qui
 
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
             res.json(currentState);
@@ -395,7 +364,6 @@ app.post('/api/update-shopping-qty', checkAuth, (req, res) => {
     });
 });
 
-// 3. Aggiungi Extra
 app.post('/api/add-shopping-extra', checkAuth, (req, res) => {
     const { name, qty } = req.body;
     
@@ -406,7 +374,7 @@ app.post('/api/add-shopping-extra', checkAuth, (req, res) => {
         if (!currentState.shoppingExtras) currentState.shoppingExtras = [];
 
         currentState.shoppingExtras.push({
-            id: Date.now(), // ID univoco semplice
+            id: Date.now(), 
             name: toTitleCase(name),
             qty: qty,
             checked: false
@@ -418,7 +386,6 @@ app.post('/api/add-shopping-extra', checkAuth, (req, res) => {
     });
 });
 
-// 4. Rimuovi Extra
 app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
     const { id } = req.body;
     
@@ -436,17 +403,15 @@ app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
     });
 });
 
-// --- AGGIORNAMENTI MENU (Porzioni, Rigenerazioni) ---
-// Nota: Queste funzioni devono ora richiamare calculateShoppingList passando lo stato completo
+// --- AGGIORNAMENTI MENU ---
 
 const updateStateAndRespond = (res, newState) => {
-    // Ricalcolo sempre la lista della spesa prima di salvare
     const recalculated = calculateShoppingList(
         newState.menu,
         newState.dessert,
         newState.people,
         newState.dessertPeople,
-        newState // Passa lo stato corrente per preservare overrides/extras/checkbox
+        newState 
     );
 
     newState.shoppingList = recalculated.shoppingList;
@@ -480,7 +445,6 @@ app.post('/api/regenerate-meal', checkAuth, (req, res) => {
 
         db.all("SELECT * FROM recipes WHERE type = ?", [currentMeal.type], (err, rows) => {
             const all = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-            // Weighted random anche qui per coerenza
             const pool = all.filter(r => r.id !== currentMeal.id);
             const newRecipe = getWeightedRandom(pool, new Set()) || currentMeal;
             
@@ -547,7 +511,7 @@ app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
     });
 });
 
-// IMPORT / EXPORT (Aggiornati per difficulty e procedure)
+// IMPORT / EXPORT
 app.get('/api/export-json', checkAuth, (req, res) => {
     db.all("SELECT name, type, servings, ingredients, difficulty, procedure FROM recipes", [], (err, rows) => {
         if (err) return res.status(500).json({ error: "Errore export" });
@@ -571,7 +535,6 @@ app.post('/api/import-json', checkAuth, (req, res) => {
         recipes.forEach(r => {
             if(r.name && r.type) {
                 const ingString = typeof r.ingredients === 'object' ? JSON.stringify(r.ingredients) : r.ingredients;
-                // Fallback valori se mancano nel json importato
                 const diff = r.difficulty || 1;
                 const proc = r.procedure || "";
                 stmt.run(r.name, r.type, r.servings || 2, ingString, diff, proc);

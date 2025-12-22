@@ -2,11 +2,11 @@ const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
 let contextSelection = null; 
-let shoppingViewMode = 'cumulative'; // 'cumulative' | 'recipe'
+let currentMenuData = null; // Memorizza lo stato corrente del menu per letture rapide
 
 // INIT
 document.addEventListener('DOMContentLoaded', () => {
-    applyTheme(); // Applica il tema in base alla data
+    applyTheme(); 
     if (authToken) {
         showView('view-dashboard');
         document.getElementById('navbar').classList.remove('hidden');
@@ -19,17 +19,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function applyTheme() {
     const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
     const body = document.body;
-    body.className = ''; // Reset
+    body.className = ''; 
 
-    // Se l'utente ha forzato un tema, usalo ed esci
     if (savedTheme !== 'auto') {
         body.classList.add(savedTheme);
         return;
     }
 
-    // Altrimenti: Logica Automatica Stagionale
     const today = new Date();
-    const m = today.getMonth() + 1; // 1-12
+    const m = today.getMonth() + 1; 
     const d = today.getDate();
 
     if (m === 12 || (m === 1 && d <= 6)) {
@@ -67,7 +65,9 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
             <div class="custom-dialog-overlay">
                 <div class="custom-dialog-box">
                     <h3>${title}</h3>
-                    <p>${message}</p>
+                    <div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">
+                        ${message}
+                    </div>
                     ${inputField}
                     <div class="dialog-buttons">
                         ${type !== 'alert' ? `<button class="btn-secondary" id="dialog-cancel">Annulla</button>` : ''}
@@ -97,9 +97,9 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
     });
 }
 
-async function showAlert(message) { await showCustomDialog("Avviso", message, 'alert'); }
-async function showConfirm(message) { return await showCustomDialog("Conferma", message, 'confirm'); }
-async function showPrompt(message, val = '') { return await showCustomDialog("Inserisci", message, 'prompt', val); }
+async function showAlert(message) { await showCustomDialog("Avviso", `<p>${message}</p>`, 'alert'); }
+async function showConfirm(message) { return await showCustomDialog("Conferma", `<p>${message}</p>`, 'confirm'); }
+async function showPrompt(message, val = '') { return await showCustomDialog("Inserisci", `<p>${message}</p>`, 'prompt', val); }
 
 // --- NAVIGATION SYSTEM ---
 function showView(viewId) {
@@ -257,7 +257,6 @@ function openRecipeModal(recipe = null) {
 function addIngredientRow(name = '', qty = '') {
     const div = document.createElement('div');
     div.className = 'ingredient-row';
-    // Nota: Ho rimosso gli stili inline flex per affidarmi al CSS
     div.innerHTML = `
         <input type="text" placeholder="Ingrediente" class="ing-name" value="${name}">
         <input type="text" placeholder="Qtà" class="ing-qty" value="${qty}">
@@ -341,6 +340,7 @@ function renderMealControl(day, type, meal, defaultPeople) {
     const labelStyle = type === 'lunch' ? 'background:var(--bg-label-lunch, #e0f2fe); color:var(--text-label-lunch, #0369a1);' : 'background:var(--bg-label-dinner, #fef3c7); color:var(--text-label-dinner, #b45309);';
     const labelText = type === 'lunch' ? 'Pranzo' : 'Cena';
 
+    // Il bottone "Libro" ora chiama openRecipeDetails con i riferimenti al giorno
     return `
     <div class="meal-row-container">
         <div class="meal-label-box" style="${labelStyle}">
@@ -353,7 +353,7 @@ function renderMealControl(day, type, meal, defaultPeople) {
         </div>
 
         <div class="meal-controls">
-            <button class="btn-icon" onclick="viewProcedure('${meal.name.replace(/'/g, "\\'")}', '${(meal.procedure || '').replace(/\r?\n/g, '<br>').replace(/'/g, "\\'")}')" title="Leggi Procedura">📖</button>
+            <button class="btn-icon" onclick="openRecipeDetails(${day}, '${type}')" title="Leggi Procedura">📖</button>
             
             <input type="number" 
                    value="${currentServings}" 
@@ -367,12 +367,46 @@ function renderMealControl(day, type, meal, defaultPeople) {
     </div>`;
 }
 
-function viewProcedure(title, text) {
-    if(!text) text = "Nessuna procedura inserita per questo piatto.";
-    showCustomDialog(title, `<div style="text-align:left; max-height:300px; overflow-y:auto;">${text}</div>`, 'alert');
+// Funzione che mostra Ingredienti (calcolati) e Procedimento
+function openRecipeDetails(day, type) {
+    if(!currentMenuData) return;
+
+    let meal, currentServings;
+    
+    if (type === 'dessert') {
+        meal = currentMenuData.dessert;
+        currentServings = currentMenuData.dessertPeople || currentMenuData.people;
+    } else {
+        const dayData = currentMenuData.menu.find(d => d.day === day);
+        if(dayData) meal = dayData[type];
+        currentServings = meal.customServings || currentMenuData.people;
+    }
+
+    if(!meal) return;
+
+    // Calcolo ingredienti
+    const ratio = currentServings / meal.servings;
+    let ingHtml = '<p><b>Ingredienti necessari:</b></p><ul style="font-size:0.9rem; padding-left:20px;">';
+    
+    meal.ingredients.forEach(ing => {
+        let displayQty = "q.b.";
+        const num = parseFloat(ing.quantity.toString().replace(',', '.'));
+        if (!isNaN(num)) {
+            displayQty = Math.round(num * ratio * 100) / 100; // Arrotonda a 2 decimali
+        }
+        ingHtml += `<li>${ing.name}: <b>${displayQty}</b></li>`;
+    });
+    ingHtml += '</ul><hr style="border:0; border-top:1px dashed #ccc; margin:15px 0;">';
+
+    const procText = (meal.procedure || "Nessuna procedura inserita.").replace(/\r?\n/g, '<br>');
+
+    showCustomDialog(meal.name, ingHtml + '<p><b>Procedimento:</b></p>' + procText, 'alert');
 }
 
 function renderMenuData(data) {
+    // Salviamo globalmente i dati per le modali
+    currentMenuData = data;
+
     const shoppingTabEl = document.getElementById('tab-shopping');
     const isShoppingActive = shoppingTabEl && shoppingTabEl.classList.contains('active');
 
@@ -413,7 +447,7 @@ function renderMenuData(data) {
         </div>
 
         <div class="meal-controls">
-        <button class="btn-icon" onclick="viewProcedure('${data.dessert.name.replace(/'/g, "\\'")}', '${(data.dessert.procedure || '').replace(/\r?\n/g, '<br>').replace(/'/g, "\\'")}')" title="Procedura">📖</button>
+        <button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button>
 
         <input type="number"
         value="${currentDessertPeople}"
@@ -430,47 +464,38 @@ function renderMenuData(data) {
         desCard.classList.add('hidden');
     }
 
-    // --- TAB SPESA (Render Avanzato) ---
     renderShoppingList(data);
 
-    // Ripristina Tab
     if (isShoppingActive) switchTab('tab-shopping');
     else switchTab('tab-menu');
 }
 
-// --- LOGICA SPESA AVANZATA ---
-
-function toggleShoppingMode() {
-    shoppingViewMode = (shoppingViewMode === 'cumulative') ? 'recipe' : 'cumulative';
-    // Ricarica solo la vista (senza chiamata API) usando i dati dell'ultimo menu
-    loadLastMenu(); 
-}
+// --- LOGICA SPESA ---
 
 function renderShoppingList(data) {
     const container = document.getElementById('shopping-container');
+    
+    // Ora usiamo solo 'main' perché il server ha unito tutto lì
     const mainList = data.shoppingList.main || {};
-    const dessertList = data.shoppingList.dessert || {};
     const extras = data.shoppingExtras || [];
 
-    // Header Controlli Spesa
+    // Toolbar Semplificata (Solo aggiungi extra)
     let html = `
         <div class="shopping-toolbar">
-            <button class="btn-small btn-secondary" onclick="toggleShoppingMode()">
-                ${shoppingViewMode === 'cumulative' ? '📂 Vista per Ricetta' : '📝 Vista Unica'}
-            </button>
             <button class="btn-small btn-success" onclick="addExtraItem()">+ Aggiungi</button>
         </div>
     `;
 
-    // 1. Render EXTRAS (Sempre visibili in cima)
+    // 1. EXTRAS
     if (extras.length > 0) {
         html += `<div class="shopping-section-title">✨ Extra Aggiunti</div>`;
         html += `<ul class="checklist">`;
         extras.forEach(item => {
             html += `
-                <li class="${item.checked ? 'checked' : ''} extra-item">
+                <li class="${item.checked ? 'checked' : ''}">
                     <div class="check-area" onclick="toggleShoppingItem(null, '${item.name}', true)">
-                        <span>${item.name}</span>
+                        <span style="color:var(--primary); text-decoration: none; opacity: 1;">${item.checked ? '✔' : ''}</span>
+			<span>${item.name}</span>
                     </div>
                     <div class="qty-area">
                          <b>${item.qty}</b>
@@ -481,94 +506,29 @@ function renderShoppingList(data) {
         html += `</ul>`;
     }
 
-    if (shoppingViewMode === 'cumulative') {
-        // --- VISTA CUMULATIVA (Standard) ---
-        
-        const renderGroup = (listObj, category) => {
-            if(Object.keys(listObj).length === 0) return '<p style="color:#999; padding:10px;">Vuoto.</p>';
-            let s = '';
-            Object.keys(listObj).forEach(k => {
-                const item = listObj[k];
-                const modClass = item.isModified ? 'modified-qty' : '';
-                s += `<li class="${item.checked ? 'checked' : ''}">
-                    <div class="check-area" onclick="toggleShoppingItem('${category}', '${k.replace(/'/g, "\\'")}')">
-                        <span>${k}</span>
-                    </div>
-                    <div class="qty-area" onclick="editShoppingQty('${category}', '${k.replace(/'/g, "\\'")}', '${item.qty}')">
-                        <b class="${modClass}">${item.qty}</b>
-                        ${item.isModified ? '<span class="edit-dot">●</span>' : ''}
-                    </div>
-                </li>`;
-            });
-            return s;
-        };
-
-        html += `<div class="shopping-section-title">🛒 Pasti Principali</div>`;
-        html += `<ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
-
-        if (data.dessert) {
-            html += `<div class="shopping-section-title" style="margin-top:20px; color:#d97706;">🍰 Dolce</div>`;
-            html += `<ul class="checklist">${renderGroup(dessertList, 'dessert')}</ul>`;
-        }
-
-    } else {
-        // --- VISTA PER RICETTA (Calcolata al volo per visualizzazione) ---
-        // Nota: Le checkbox modificano comunque lo stato globale nell'oggetto shoppingList del server
-        
-        const renderRecipeIngredients = (meal, people, category) => {
-            if (!meal) return '';
-            const ratio = (meal.customServings || people) / meal.servings;
-            const ingredients = meal.ingredients || []; // è già un array nel json
-
-            if (ingredients.length === 0) return '';
-
-            let s = `<div class="recipe-shopping-card">`;
-            s += `<div class="recipe-shopping-header"><b>${meal.name}</b> (${meal.customServings || people}p)</div>`;
-            s += `<ul class="checklist compact">`;
-            
-            ingredients.forEach(ing => {
-                // Calcola quantità per questa specifica ricetta
-                let qtyDisplay = "q.b.";
-                const num = parseFloat(ing.quantity.toString().replace(',', '.'));
-                if (!isNaN(num)) qtyDisplay = Math.round(num * ratio * 100) / 100;
-
-                // Trova stato checked globale
-                // Attenzione: deve matchare la chiave salvata nel server (Title Case)
-                const key = ing.name.replace(/\b\w/g, l => l.toUpperCase());
-                let isChecked = false;
-                
-                // Cerchiamo nel main o dessert
-                if (category === 'dessert') {
-                    if (dessertList[key] && dessertList[key].checked) isChecked = true;
-                } else {
-                    if (mainList[key] && mainList[key].checked) isChecked = true;
-                }
-
-                s += `<li class="${isChecked ? 'checked' : ''}" onclick="toggleShoppingItem('${category}', '${key.replace(/'/g, "\\'")}')">
-                        <span>${ing.name}</span>
-                        <span>${qtyDisplay}</span>
-                      </li>`;
-            });
-            s += `</ul></div>`;
-            return s;
-        };
-
-        html += `<div style="padding-top:10px;">`;
-        
-        // Loop Menu
-        data.menu.forEach(d => {
-            if(d.lunch) html += renderRecipeIngredients(d.lunch, data.people, 'main');
-            if(d.dinner) html += renderRecipeIngredients(d.dinner, data.people, 'main');
+    // 2. LISTA UNICA (CUMULATIVA)
+    const renderGroup = (listObj, category) => {
+        if(Object.keys(listObj).length === 0) return '<p style="color:#999; padding:10px;">Vuoto.</p>';
+        let s = '';
+        Object.keys(listObj).forEach(k => {
+            const item = listObj[k];
+            const modClass = item.isModified ? 'modified-qty' : '';
+            s += `<li class="${item.checked ? 'checked' : ''}">
+                <div class="check-area" onclick="toggleShoppingItem('${category}', '${k.replace(/'/g, "\\'")}')">
+                    <span style="color:var(--primary); text-decoration: none; opacity: 1;">${item.checked ? '✔' : ''}</span>
+		    <span>${k}</span>
+                </div>
+                <div class="qty-area" onclick="editShoppingQty('${category}', '${k.replace(/'/g, "\\'")}', '${item.qty}')">
+                    <b class="${modClass}">${item.qty}</b>
+                    ${item.isModified ? '<span class="edit-dot">●</span>' : ''}
+                </div>
+            </li>`;
         });
+        return s;
+    };
 
-        // Dolce
-        if(data.dessert) {
-            html += renderRecipeIngredients(data.dessert, (data.dessertPeople || data.people), 'dessert');
-        }
-        
-        html += `</div>`;
-        html += `<div style="text-align:center; font-size:0.8rem; color:#666; margin-top:10px;">Nota: Spuntare un ingrediente lo segna come preso per tutte le ricette.</div>`;
-    }
+    html += `<div class="shopping-section-title">🛒 Lista della Spesa</div>`;
+    html += `<ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
 
     container.innerHTML = html;
 }
@@ -579,7 +539,6 @@ function renderShoppingList(data) {
 async function toggleShoppingItem(category, itemName, isExtra = false) {
     const res = await apiCall('/toggle-shopping-item', 'POST', { category, item: itemName, isExtra });
     if (res.ok) {
-        // Aggiorniamo i dati locali e ridisegniamo senza full reload
         const updatedData = await res.json();
         renderMenuData(updatedData);
     }
@@ -602,14 +561,14 @@ async function removeExtraItem(id) {
 
 async function editShoppingQty(category, itemName, currentQty) {
     const newQty = await showPrompt(`Modifica quantità per ${itemName}:`, currentQty);
-    if (newQty === null || newQty === currentQty) return; // Annullato o uguale
+    if (newQty === null || newQty === currentQty) return; 
 
     const res = await apiCall('/update-shopping-qty', 'POST', { category, item: itemName, newQty });
     if(res.ok) renderMenuData(await res.json());
 }
 
 
-// --- AZIONI MENU: Rigenerazione Singola & Change Props ---
+// --- AZIONI MENU ---
 
 async function regenerateSingleMeal(day, type) {
     if(!(await showConfirm(`Vuoi cambiare questo piatto?`))) return;
@@ -636,7 +595,7 @@ async function changeDessertPeople(val) {
     if(res.ok) renderMenuData(await res.json());
 }
 
-// --- SELETTORE MANUALE GENERALE (Pasti e Dolci) ---
+// --- SELETTORE MANUALE ---
 
 async function openMealSelector(day, type) {
     contextSelection = { day, type };
@@ -706,7 +665,6 @@ async function selectManualRecipe(id) {
 
 // --- IMPORT / EXPORT JSON ---
 function showBackupModal() {
-    // Imposta il valore corretto della select prima di mostrare
     const currentPref = localStorage.getItem('familyMenuTheme') || 'auto';
     const selector = document.getElementById('theme-selector');
     if(selector) selector.value = currentPref;

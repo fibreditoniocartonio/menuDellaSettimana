@@ -278,8 +278,7 @@ nav {
 .checklist li:last-child { border-bottom: none; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
 
 .checklist li.checked span { text-decoration: line-through; color: var(--text-light); opacity: 0.6; }
-.checklist li.checked { background: transparent; }
-.extra-item { background: #fffcf0 !important; }
+
 .modified-qty { color: var(--accent); font-weight: bold; }
 .edit-dot { color: var(--accent); font-size: 0.6rem; margin-left: 2px; vertical-align: middle; }
 .check-area { flex: 1; cursor: pointer; display: flex; align-items: center; }
