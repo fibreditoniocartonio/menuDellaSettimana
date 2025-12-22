@@ -3,6 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs'); // Aggiunto per gestione file system
 
 const app = express();    
 const PORT = process.env.PORT || 3000;
@@ -10,7 +11,17 @@ const HOST = process.env.IP || "0.0.0.0";
 
 // CONFIGURAZIONE
 const SECRET_CODE = "0902"; 
-const DB_FILE = "recipes.db";
+
+// --- MODIFICA PATH DB E CREAZIONE CARTELLA ---
+const DATA_DIR = path.join(__dirname, 'data');
+const DB_FILE = path.join(DATA_DIR, 'recipes.db');
+
+// Crea la cartella 'data' se non esiste
+if (!fs.existsSync(DATA_DIR)){
+    fs.mkdirSync(DATA_DIR);
+    console.log("Cartella 'data' creata.");
+}
+// ---------------------------------------------
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' })); 
@@ -264,17 +275,12 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
                 }
 
                 // 2. Convertiamo gli override (modifiche manuali) in nuovi Extra
-                // Perché se rigenero il menu, quella modifica era una volontà specifica dell'utente
-                // e non deve andare persa.
                 if (oldData.shoppingOverrides) {
                     Object.keys(oldData.shoppingOverrides).forEach(key => {
-                        // La chiave è tipo "main_Farina"
                         const pureName = key.split('_')[1] || key;
                         const qty = oldData.shoppingOverrides[key];
-                        
-                        // Aggiungiamo come extra
                         preservedExtras.push({
-                            id: Date.now() + Math.random(), // ID univoco temporaneo
+                            id: Date.now() + Math.random(),
                             name: pureName,
                             qty: qty,
                             checked: false
@@ -286,7 +292,6 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             }
         }
 
-        // Ora generiamo il nuovo menu
         db.all("SELECT * FROM recipes", [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             if (rows.length < 2) return res.status(400).json({ error: "Inserisci almeno un po' di ricette prima!" });
@@ -314,8 +319,6 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             const selectedDessert = getWeightedRandom(dolci, new Set()); 
             const dessertPeople = people;
 
-            // Passiamo i preservedExtras nel nuovo stato.
-            // Passiamo shoppingOverrides vuoto ({}) perché gli override vecchi sono diventati extra.
             const tempState = { 
                 shoppingExtras: preservedExtras, 
                 shoppingOverrides: {} 
@@ -326,8 +329,8 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             const stateData = { 
                 menu: weekMenu, 
                 shoppingList: calculated.shoppingList, 
-                shoppingOverrides: calculated.shoppingOverrides, // Sarà vuoto, pulito
-                shoppingExtras: calculated.shoppingExtras,     // Conterrà vecchi extra + vecchi override
+                shoppingOverrides: calculated.shoppingOverrides, 
+                shoppingExtras: calculated.shoppingExtras,     
                 dessert: selectedDessert, 
                 people, 
                 dessertPeople 
@@ -363,7 +366,6 @@ app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
             const extraItem = currentState.shoppingExtras.find(e => e.name === item);
             if(extraItem) extraItem.checked = !extraItem.checked;
         } else {
-            // Nota: category sarà 'main'
             if (currentState.shoppingList[category] && currentState.shoppingList[category][item]) {
                 currentState.shoppingList[category][item].checked = !currentState.shoppingList[category][item].checked;
             }
@@ -382,7 +384,6 @@ app.post('/api/update-shopping-qty', checkAuth, (req, res) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
-        
         const overrideKey = `${category}_${item}`;
         
         if (!currentState.shoppingOverrides) currentState.shoppingOverrides = {};
@@ -444,13 +445,12 @@ app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
     });
 });
 
-// NUOVA ROTTA: Pulisci tutta la lista extra
 app.post('/api/clear-shopping-extras', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
         if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
         
         let currentState = JSON.parse(rowState.data);
-        currentState.shoppingExtras = []; // Reset array
+        currentState.shoppingExtras = []; 
 
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
             res.json(currentState);

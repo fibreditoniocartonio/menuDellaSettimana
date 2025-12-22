@@ -10,6 +10,8 @@
     --primary-dark: #3730a3;
     --accent: #f43f5e;        
     --bg: #f8fafc;            
+    --bg-image: url('bg/winter.png'); /* Immagine Default */
+    
     --surface: #ffffff;       
     --text: #334155;          
     --text-light: #94a3b8;
@@ -31,6 +33,7 @@ body.theme-christmas {
     --primary-dark: #7f1d1d;
     --accent: #15803d;        
     --bg: #fef2f2;            
+    --bg-image: url('bg/christmas.png');
     --bg-label-lunch: #dcfce7; 
     --text-label-lunch: #166534;
     --bg-label-dinner: #fee2e2; 
@@ -43,6 +46,7 @@ body.theme-valentine {
     --primary-dark: #9d174d;
     --accent: #be123c;
     --bg: #fff1f2;            
+    --bg-image: url('bg/valentine.png');
 }
 
 body.theme-spring {
@@ -51,6 +55,7 @@ body.theme-spring {
     --primary-dark: #047857;
     --accent: #f59e0b;        
     --bg: #f0fdf4;            
+    --bg-image: url('bg/spring.png');
 }
 
 body.theme-summer {
@@ -59,6 +64,7 @@ body.theme-summer {
     --primary-dark: #0369a1;
     --accent: #facc15;        
     --bg: #f0f9ff;
+    --bg-image: url('bg/summer.png');
 }
 
 body.theme-autumn {
@@ -67,6 +73,7 @@ body.theme-autumn {
     --primary-dark: #92400e;
     --accent: #78350f;        
     --bg: #fffbeb;            
+    --bg-image: url('bg/autumn.png');
 }
 
 body.theme-halloween {
@@ -75,11 +82,17 @@ body.theme-halloween {
     --primary-dark: #581c87;
     --accent: #ea580c;        
     --bg: #faf5ff;
+    --bg-image: url('bg/halloween.png');
 }
 
 body { 
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
     background-color: var(--bg); 
+    background-image: var(--bg-image);
+    background-repeat: repeat;
+    background-position: center top;
+    background-attachment: fixed; 
+    
     color: var(--text); 
     margin: 0; 
     padding: 0; 
@@ -137,11 +150,27 @@ nav {
 .card-action .icon { font-size: 2rem; margin-bottom: 10px; display: block;}
 .card-action h3 { margin: 0; font-size: 0.95rem; color: var(--text); font-weight: 600; }
 .card-action p { margin: 5px 0 0; font-size: 0.75rem; color: var(--text-light); }
-.card-action.secondary { background: rgba(255,255,255,0.6); border: 1px dashed var(--border); }
 
-/* LISTA RICETTE */
+/* LISTA RICETTE E TITOLI */
 .toolbar { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
-.recipe-group-header { margin-top: 25px; margin-bottom: 10px; color: var(--primary); font-weight: 800; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; padding-left: 5px; }
+
+/* FIX LEGGIBILITÀ TITOLI RICETTE */
+.recipe-group-header { 
+    margin-top: 25px; 
+    margin-bottom: 10px; 
+    color: var(--primary); 
+    font-weight: 800; 
+    font-size: 0.9rem; 
+    text-transform: uppercase; 
+    letter-spacing: 1px; 
+    
+    /* Nuovo stile "Pillola" per leggibilità su sfondo */
+    background: var(--surface);
+    padding: 8px 16px;
+    border-radius: 20px;
+    width: fit-content;
+    box-shadow: var(--shadow);
+}
 
 .recipe-card { 
     background: var(--surface); 
@@ -159,25 +188,19 @@ nav {
 /* --- GESTIONE RIGA INGREDIENTI (FIX LAYOUT) --- */
 .ingredient-row {
     display: flex;
-    gap: 8px; /* Spazio ridotto per stare nei mobile */
+    gap: 8px;
     margin-bottom: 8px;
     align-items: center;
     width: 100%;
 }
-
-/* Gli input dentro la riga ingredienti devono potersi restringere */
 .ingredient-row input {
     margin: 0;
-    min-width: 0; /* FONDAMENTALE: evita overflow */
-    border-radius: 8px; /* Leggermente meno arrotondati per spazio */
-    padding: 12px 10px; /* Padding ottimizzato */
+    min-width: 0;
+    border-radius: 8px;
+    padding: 12px 10px;
 }
-
-/* Proporzioni flessibili */
-.ingredient-row .ing-name { flex: 7; } /* 70% spazio */
-.ingredient-row .ing-qty { flex: 3; }  /* 30% spazio */
-
-/* Bottone X fisso che non si schiaccia */
+.ingredient-row .ing-name { flex: 7; } 
+.ingredient-row .ing-qty { flex: 3; }  
 .ingredient-row .btn-remove-ing {
     flex-shrink: 0;
     width: 32px;
@@ -195,9 +218,25 @@ nav {
 
 
 /* MENU & SHOPPING UI */
-.tab-header { display: flex; margin: 10px 0 20px; background: rgba(0,0,0,0.05); border-radius: 50px; padding: 5px; }
+
+/* FIX LEGGIBILITÀ TABS */
+.tab-header { 
+    display: flex; 
+    margin: 10px 0 20px; 
+    
+    /* Sfondo semi-trasparente bianco + blur */
+    background: rgba(255, 255, 255, 0.75); 
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.4);
+
+    border-radius: 50px; 
+    padding: 5px; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
 .tab-btn { flex: 1; background: transparent; border: none; padding: 10px; border-radius: 40px; font-weight: 600; color: var(--text-light); transition: 0.3s; }
-.tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
 
 .tab-content { display: none; }
 .tab-content.active { display: block; }
@@ -218,27 +257,23 @@ nav {
 .menu-card-header h4 { margin: 0; color: var(--primary); font-size: 0.9rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; }
 .meal-divider { border: 0; border-top: 1px dashed var(--border); margin: 15px 0; }
 
-/* MODIFICA LAYOUT RIGA PASTO */
 .meal-row-container {
     display: flex;
-    flex-direction: column; /* Cambiato in colonna per dividere le righe */
+    flex-direction: column;
     gap: 8px;
     margin-bottom: 12px;
 }
-
 .meal-top-row {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
 }
-
 .meal-bottom-row {
     display: flex;
     width: 100%;
-    justify-content: flex-end; /* Sposta i bottoni a destra */
+    justify-content: flex-end; 
 }
-
 .meal-label-box {
     font-size: 0.7rem; 
     font-weight: bold; 
@@ -260,9 +295,7 @@ nav {
     overflow: hidden;
     text-overflow: ellipsis;
 }
-
 .meal-controls { display: flex; align-items: center; gap: 8px; }
-
 .small-qty-input { 
     width: 40px !important; 
     padding: 6px !important; 
@@ -277,7 +310,26 @@ nav {
 
 /* SHOPPING LIST */
 .shopping-toolbar { display: flex; gap: 10px; margin-bottom: 20px; justify-content: flex-end; }
-.shopping-section-title { font-weight: 700; color: var(--text); margin: 20px 0 10px; font-size: 1rem; }
+.shopping-section-title { 
+    font-weight: 700; 
+    color: var(--text); 
+    margin: 20px 0 10px; 
+    font-size: 1rem; 
+    background: var(--surface);
+    padding: 8px 16px;
+    border-radius: 20px;
+    width: fit-content;
+    box-shadow: var(--shadow);
+}
+#shopping-container > div > .btn-text {
+    background: var(--surface);
+    padding: 8px 16px;
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    margin-top: 5px;
+    /* Assicura che il testo rosso sia ben leggibile */
+    font-weight: 600;
+}
 
 .checklist { list-style: none; padding: 0; }
 .checklist li { 
