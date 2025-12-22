@@ -16,6 +16,25 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- THEMING SYSTEM ---
+function getEasterDate(year) {
+    const a = year % 19;
+    const b = Math.floor(year / 100);
+    const c = year % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  
+    const month = Math.floor((h + l - 7 * m + 114) / 31); // 3 = Marzo, 4 = Aprile
+    const day = ((h + l - 7 * m + 114) % 31) + 1;
+    return { month: month, day: day }; // month è 1-based (3 o 4)
+}
+
 function applyTheme() {
     const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
     const body = document.body;
@@ -27,14 +46,36 @@ function applyTheme() {
     }
 
     const today = new Date();
-    const m = today.getMonth() + 1; 
+    const m = today.getMonth() + 1; // 1-12
     const d = today.getDate();
+    const y = today.getFullYear();
 
+    // Calcolo Pasqua per l'anno corrente
+    const easter = getEasterDate(y);
+    const easterDate = new Date(y, easter.month - 1, easter.day);
+    
+    // Definiamo il range Pasquale: dal Sabato Santo a Pasquetta (Lunedi)
+    // Pasqua - 1 giorno
+    const holySaturday = new Date(easterDate);
+    holySaturday.setDate(easterDate.getDate() - 1);
+    // Pasqua + 1 giorno (Pasquetta)
+    const easterMonday = new Date(easterDate);
+    easterMonday.setDate(easterDate.getDate() + 1);
+
+    // Controllo range temporale (timestamp per semplicità)
+    const todayTime = new Date(y, m - 1, d).getTime();
+
+    if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) {
+        body.classList.add('theme-easter');
+        return;
+    }
+
+    // Altre festività fisse
     if (m === 12 || (m === 1 && d <= 6)) {
         body.classList.add('theme-christmas');
-    } else if (m === 10 && d >= 20) {
+    } else if (m === 10 && d == 31) {
         body.classList.add('theme-halloween');
-    } else if (m === 2 && d <= 14) {
+    } else if (m === 2 && d == 14) {
         body.classList.add('theme-valentine');
     } else if (m >= 3 && m <= 5) {
         body.classList.add('theme-spring');
@@ -340,7 +381,6 @@ function renderMealControl(day, type, meal, defaultPeople) {
     const labelStyle = type === 'lunch' ? 'background:var(--bg-label-lunch, #e0f2fe); color:var(--text-label-lunch, #0369a1);' : 'background:var(--bg-label-dinner, #fef3c7); color:var(--text-label-dinner, #b45309);';
     const labelText = type === 'lunch' ? 'Pranzo' : 'Cena';
 
-    // MODIFICA LAYOUT: Separati su due righe per evitare sovrapposizioni su mobile
     return `
     <div class="meal-row-container">
         <!-- RIGA SUPERIORE: Etichetta e Nome -->
@@ -410,7 +450,6 @@ function openRecipeDetails(day, type) {
 }
 
 function renderMenuData(data) {
-    // Salviamo globalmente i dati per le modali
     currentMenuData = data;
 
     const shoppingTabEl = document.getElementById('tab-shopping');
@@ -440,7 +479,6 @@ function renderMenuData(data) {
         const currentDessertPeople = data.dessertPeople || data.people;
         const diffStars = "⭐".repeat(data.dessert.difficulty || 1);
 
-        // Layout aggiornato anche per il dolce
         desCard.innerHTML = `
         <div class="menu-card-header">
             <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
@@ -482,15 +520,12 @@ function renderMenuData(data) {
 }
 
 // --- LOGICA SPESA ---
-
 function renderShoppingList(data) {
     const container = document.getElementById('shopping-container');
     
-    // Ora usiamo solo 'main' perché il server ha unito tutto lì
     const mainList = data.shoppingList.main || {};
     const extras = data.shoppingExtras || [];
 
-    // Toolbar Semplificata (Solo aggiungi extra)
     let html = `
         <div class="shopping-toolbar">
             <button class="btn-small btn-success" onclick="addExtraItem()">+ Aggiungi</button>
@@ -516,7 +551,6 @@ function renderShoppingList(data) {
         });
         html += `</ul>`;
         
-        // Aggiungi bottone per pulire tutti gli extra
         html += `<div style="text-align:right; margin-top:5px;">
                     <button class="btn-text" style="color:var(--accent); font-size:0.8rem;" onclick="clearManualList()">🗑 Svuota lista manuale</button>
                  </div>`;
@@ -551,7 +585,6 @@ function renderShoppingList(data) {
 
 
 // --- AZIONI SPESA (API Calls) ---
-
 async function toggleShoppingItem(category, itemName, isExtra = false) {
     const res = await apiCall('/toggle-shopping-item', 'POST', { category, item: itemName, isExtra });
     if (res.ok) {
@@ -591,7 +624,6 @@ async function editShoppingQty(category, itemName, currentQty) {
 
 
 // --- AZIONI MENU ---
-
 async function regenerateSingleMeal(day, type) {
     if(!(await showConfirm(`Vuoi cambiare questo piatto?`))) return;
     const res = await apiCall('/regenerate-meal', 'POST', { day, type });
@@ -618,7 +650,6 @@ async function changeDessertPeople(val) {
 }
 
 // --- SELETTORE MANUALE ---
-
 async function openMealSelector(day, type) {
     contextSelection = { day, type };
     

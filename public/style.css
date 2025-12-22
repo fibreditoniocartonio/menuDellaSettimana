@@ -4,29 +4,30 @@
 }
 
 :root {
-    /* DEFAULT THEME (Winter/Neutral) */
+    /* DEFAULT COLORS (Neutral)*/
     --primary: #4f46e5;       
     --primary-light: #818cf8;
     --primary-dark: #3730a3;
     --accent: #f43f5e;        
-    --bg: #f8fafc;            
-    --bg-image: url('bg/winter.png'); /* Immagine Default */
-    
+    --bg: #f8fafc;                
     --surface: #ffffff;       
     --text: #334155;          
     --text-light: #94a3b8;
     --border: #e2e8f0;
-    
     --bg-label-lunch: #e0f2fe;
     --text-label-lunch: #0284c7;
     --bg-label-dinner: #fef3c7;
     --text-label-dinner: #d97706;
-    
     --radius: 16px;           
     --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); 
 }
 
 /* --- THEME OVERRIDES --- */
+
+body.theme-winter {
+    --bg-image: url('bg/winter.png');
+}
+
 body.theme-christmas {
     --primary: #b91c1c;       
     --primary-light: #ef4444;
@@ -56,6 +57,20 @@ body.theme-spring {
     --accent: #f59e0b;        
     --bg: #f0fdf4;            
     --bg-image: url('bg/spring.png');
+}
+
+/* EASTER THEME */
+body.theme-easter {
+    --primary: #8b5cf6;       /* Soft Violet */
+    --primary-light: #a78bfa;
+    --primary-dark: #7c3aed;
+    --accent: #facc15;        /* Yellow Chick */
+    --bg: #fdf4ff;            
+    --bg-image: url('bg/easter.png');
+    --bg-label-lunch: #dcfce7; /* Greenish */
+    --text-label-lunch: #15803d;
+    --bg-label-dinner: #fef9c3; /* Yellowish */
+    --text-label-dinner: #854d0e;
 }
 
 body.theme-summer {
@@ -88,7 +103,7 @@ body.theme-halloween {
 body { 
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
     background-color: var(--bg); 
-    background-image: var(--bg-image);
+    background-image: var(--bg-image); 
     background-repeat: repeat;
     background-position: center top;
     background-attachment: fixed; 
