@@ -85,10 +85,6 @@ const getWeightedRandom = (items, usedIds) => {
 };
 
 // --- LOGICA LISTA DELLA SPESA AVANZATA ---
-/* 
-   MODIFICA: Unita la lista Dolce alla lista Main.
-   Tutti gli ingredienti finiscono in 'main'.
-*/
 const updateShoppingItem = (list, name, qtyRaw, ratio) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
@@ -103,9 +99,10 @@ const updateShoppingItem = (list, name, qtyRaw, ratio) => {
 };
 
 function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = {}) {
-    // Recuperiamo lo stato precedente della lista 'main' (unica lista ora)
+    // Recuperiamo lo stato precedente della lista 'main'
     const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
     
+    // Le modifiche manuali e gli extra vengono passati dall'esterno (già elaborati nel generate-menu)
     const overrides = oldState.shoppingOverrides || {};
     const extras = oldState.shoppingExtras || [];
 
@@ -143,9 +140,7 @@ function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = 
             const item = rawList[k];
             const titleKey = toTitleCase(item.originalName);
             
-            // Chiave univoca per gli override: "category_ItemName" (category sarà sempre 'main')
             const overrideKey = `${category}_${titleKey}`;
-            
             const hasOverride = overrides.hasOwnProperty(overrideKey);
             
             let displayQty;
@@ -180,7 +175,6 @@ function calculateShoppingList(menu, dessert, people, dessertPeople, oldState = 
 
     return {
         shoppingList: {
-            // Unica categoria 'main' che contiene tutto
             main: formatList(listCombinedRaw, oldMain, 'main') 
         },
         shoppingOverrides: overrides,
@@ -253,49 +247,96 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
 
 app.post('/api/generate-menu', checkAuth, (req, res) => {
     const { people } = req.body;
-    
-    db.all("SELECT * FROM recipes", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (rows.length < 2) return res.status(400).json({ error: "Inserisci almeno un po' di ricette prima!" });
-        
-        const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
-        const primi = allRecipes.filter(r => r.type === 'primo');
-        const secondi = allRecipes.filter(r => r.type === 'secondo');
-        const dolci = allRecipes.filter(r => r.type === 'dolce');
-        
-        const weekMenu = [];
-        const usedIds = new Set(); 
 
-        for (let i = 0; i < 7; i++) {
-            const dayMenu = { day: i + 1, lunch: null, dinner: null };
-            if (i % 2 === 0) {
-                dayMenu.lunch = getWeightedRandom(primi, usedIds);
-                dayMenu.dinner = getWeightedRandom(secondi, usedIds);
-            } else {
-                dayMenu.lunch = getWeightedRandom(secondi, usedIds);
-                dayMenu.dinner = getWeightedRandom(primi, usedIds);
+    // PRIMA DI GENERARE: Recuperiamo lo stato precedente per salvare gli Extra e le Modifiche
+    db.get("SELECT data FROM menu_state WHERE id = 1", (errState, rowState) => {
+        
+        // Prepariamo gli extra da preservare
+        let preservedExtras = [];
+        
+        if (!errState && rowState && rowState.data) {
+            try {
+                const oldData = JSON.parse(rowState.data);
+                
+                // 1. Manteniamo gli extra già esistenti
+                if (oldData.shoppingExtras && Array.isArray(oldData.shoppingExtras)) {
+                    preservedExtras = [...oldData.shoppingExtras];
+                }
+
+                // 2. Convertiamo gli override (modifiche manuali) in nuovi Extra
+                // Perché se rigenero il menu, quella modifica era una volontà specifica dell'utente
+                // e non deve andare persa.
+                if (oldData.shoppingOverrides) {
+                    Object.keys(oldData.shoppingOverrides).forEach(key => {
+                        // La chiave è tipo "main_Farina"
+                        const pureName = key.split('_')[1] || key;
+                        const qty = oldData.shoppingOverrides[key];
+                        
+                        // Aggiungiamo come extra
+                        preservedExtras.push({
+                            id: Date.now() + Math.random(), // ID univoco temporaneo
+                            name: pureName,
+                            qty: qty,
+                            checked: false
+                        });
+                    });
+                }
+            } catch (e) {
+                console.error("Errore parsing vecchio stato", e);
             }
-            weekMenu.push(dayMenu);
         }
 
-        const selectedDessert = getWeightedRandom(dolci, new Set()); 
-        const dessertPeople = people;
+        // Ora generiamo il nuovo menu
+        db.all("SELECT * FROM recipes", [], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (rows.length < 2) return res.status(400).json({ error: "Inserisci almeno un po' di ricette prima!" });
+            
+            const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
+            const primi = allRecipes.filter(r => r.type === 'primo');
+            const secondi = allRecipes.filter(r => r.type === 'secondo');
+            const dolci = allRecipes.filter(r => r.type === 'dolce');
+            
+            const weekMenu = [];
+            const usedIds = new Set(); 
 
-        const calculated = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople, {});
-        
-        const stateData = { 
-            menu: weekMenu, 
-            shoppingList: calculated.shoppingList, 
-            shoppingOverrides: calculated.shoppingOverrides,
-            shoppingExtras: calculated.shoppingExtras,
-            dessert: selectedDessert, 
-            people, 
-            dessertPeople 
-        };
-        
-        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
-            if (e) console.error(e);
-            res.json(stateData);
+            for (let i = 0; i < 7; i++) {
+                const dayMenu = { day: i + 1, lunch: null, dinner: null };
+                if (i % 2 === 0) {
+                    dayMenu.lunch = getWeightedRandom(primi, usedIds);
+                    dayMenu.dinner = getWeightedRandom(secondi, usedIds);
+                } else {
+                    dayMenu.lunch = getWeightedRandom(secondi, usedIds);
+                    dayMenu.dinner = getWeightedRandom(primi, usedIds);
+                }
+                weekMenu.push(dayMenu);
+            }
+
+            const selectedDessert = getWeightedRandom(dolci, new Set()); 
+            const dessertPeople = people;
+
+            // Passiamo i preservedExtras nel nuovo stato.
+            // Passiamo shoppingOverrides vuoto ({}) perché gli override vecchi sono diventati extra.
+            const tempState = { 
+                shoppingExtras: preservedExtras, 
+                shoppingOverrides: {} 
+            };
+
+            const calculated = calculateShoppingList(weekMenu, selectedDessert, people, dessertPeople, tempState);
+            
+            const stateData = { 
+                menu: weekMenu, 
+                shoppingList: calculated.shoppingList, 
+                shoppingOverrides: calculated.shoppingOverrides, // Sarà vuoto, pulito
+                shoppingExtras: calculated.shoppingExtras,     // Conterrà vecchi extra + vecchi override
+                dessert: selectedDessert, 
+                people, 
+                dessertPeople 
+            };
+            
+            db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
+                if (e) console.error(e);
+                res.json(stateData);
+            });
         });
     });
 });
@@ -402,6 +443,21 @@ app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
         });
     });
 });
+
+// NUOVA ROTTA: Pulisci tutta la lista extra
+app.post('/api/clear-shopping-extras', checkAuth, (req, res) => {
+    db.get("SELECT data FROM menu_state WHERE id = 1", (err, rowState) => {
+        if (err || !rowState) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let currentState = JSON.parse(rowState.data);
+        currentState.shoppingExtras = []; // Reset array
+
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(currentState)], () => {
+            res.json(currentState);
+        });
+    });
+});
+
 
 // --- AGGIORNAMENTI MENU ---
 

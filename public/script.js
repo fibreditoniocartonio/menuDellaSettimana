@@ -340,29 +340,35 @@ function renderMealControl(day, type, meal, defaultPeople) {
     const labelStyle = type === 'lunch' ? 'background:var(--bg-label-lunch, #e0f2fe); color:var(--text-label-lunch, #0369a1);' : 'background:var(--bg-label-dinner, #fef3c7); color:var(--text-label-dinner, #b45309);';
     const labelText = type === 'lunch' ? 'Pranzo' : 'Cena';
 
-    // Il bottone "Libro" ora chiama openRecipeDetails con i riferimenti al giorno
+    // MODIFICA LAYOUT: Separati su due righe per evitare sovrapposizioni su mobile
     return `
     <div class="meal-row-container">
-        <div class="meal-label-box" style="${labelStyle}">
-            ${labelText}
-        </div>
-        
-        <div class="meal-info">
-            <span style="font-weight: 500;">${typeEmoji} ${meal.name}</span>
-            <span style="font-size:0.7rem; color:#999;">${difficultyStars}</span>
+        <!-- RIGA SUPERIORE: Etichetta e Nome -->
+        <div class="meal-top-row">
+            <div class="meal-label-box" style="${labelStyle}">
+                ${labelText}
+            </div>
+            
+            <div class="meal-info">
+                <span style="font-size:1rem; font-weight: 500;">${typeEmoji} ${meal.name}</span>
+                <span style="font-size:0.6rem; color:#999;">${difficultyStars}</span>
+            </div>
         </div>
 
-        <div class="meal-controls">
-            <button class="btn-icon" onclick="openRecipeDetails(${day}, '${type}')" title="Leggi Procedura">📖</button>
-            
-            <input type="number" 
-                   value="${currentServings}" 
-                   class="small-qty-input" 
-                   onchange="changeMealServings(${day}, '${type}', this.value)" 
-                   title="Persone">
-            
-            <button class="btn-icon" onclick="openMealSelector(${day}, '${type}')" title="Scegli Manualmente">🔍</button>
-            <button class="btn-icon" onclick="regenerateSingleMeal(${day}, '${type}')" title="Randomizza Piatto">🔄</button>
+        <!-- RIGA INFERIORE: Controlli -->
+        <div class="meal-bottom-row">
+            <div class="meal-controls">
+                <button class="btn-icon" onclick="openRecipeDetails(${day}, '${type}')" title="Leggi Procedura">📖</button>
+                
+                <input type="number" 
+                       value="${currentServings}" 
+                       class="small-qty-input" 
+                       onchange="changeMealServings(${day}, '${type}', this.value)" 
+                       title="Persone">
+                
+                <button class="btn-icon" onclick="openMealSelector(${day}, '${type}')" title="Scegli Manualmente">🔍</button>
+                <button class="btn-icon" onclick="regenerateSingleMeal(${day}, '${type}')" title="Randomizza Piatto">🔄</button>
+            </div>
         </div>
     </div>`;
 }
@@ -434,30 +440,35 @@ function renderMenuData(data) {
         const currentDessertPeople = data.dessertPeople || data.people;
         const diffStars = "⭐".repeat(data.dessert.difficulty || 1);
 
+        // Layout aggiornato anche per il dolce
         desCard.innerHTML = `
         <div class="menu-card-header">
-        <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
+            <h4 style="color:#d97706">🍰 Dolce della Settimana</h4>
         </div>
         <div class="meal-row-container">
-        <div class="meal-label-box" style="visibility:hidden; width:0; padding:0; min-width:0;"></div>
+            <div class="meal-top-row">
+                <div class="meal-label-box" style="visibility:hidden; width:0; padding:0; min-width:0;"></div>
 
-        <div class="meal-info">
-        <span style="font-weight: 500;">${data.dessert.name}</span>
-        <span style="font-size:0.7rem; color:#999;">${diffStars}</span>
-        </div>
+                <div class="meal-info">
+                    <span style="font-weight: 500;">${data.dessert.name}</span>
+                    <span style="font-size:0.7rem; color:#999;">${diffStars}</span>
+                </div>
+            </div>
 
-        <div class="meal-controls">
-        <button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button>
+            <div class="meal-bottom-row">
+                <div class="meal-controls">
+                    <button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button>
 
-        <input type="number"
-        value="${currentDessertPeople}"
-        class="small-qty-input"
-        onchange="changeDessertPeople(this.value)"
-        title="Persone">
+                    <input type="number"
+                    value="${currentDessertPeople}"
+                    class="small-qty-input"
+                    onchange="changeDessertPeople(this.value)"
+                    title="Persone">
 
-        <button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli Manualmente">🔍</button>
-        <button class="btn-icon" onclick="regenerateDessert()" title="Cambia Random">🔄</button>
-        </div>
+                    <button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli Manualmente">🔍</button>
+                    <button class="btn-icon" onclick="regenerateDessert()" title="Cambia Random">🔄</button>
+                </div>
+            </div>
         </div>
         `;
     } else {
@@ -504,6 +515,11 @@ function renderShoppingList(data) {
                 </li>`;
         });
         html += `</ul>`;
+        
+        // Aggiungi bottone per pulire tutti gli extra
+        html += `<div style="text-align:right; margin-top:5px;">
+                    <button class="btn-text" style="color:var(--accent); font-size:0.8rem;" onclick="clearManualList()">🗑 Svuota lista manuale</button>
+                 </div>`;
     }
 
     // 2. LISTA UNICA (CUMULATIVA)
@@ -556,6 +572,12 @@ async function addExtraItem() {
 async function removeExtraItem(id) {
     if(!(await showConfirm("Rimuovere questo extra?"))) return;
     const res = await apiCall('/remove-shopping-extra', 'POST', { id });
+    if(res.ok) renderMenuData(await res.json());
+}
+
+async function clearManualList() {
+    if(!(await showConfirm("Cancellare tutti gli ingredienti manuali?"))) return;
+    const res = await apiCall('/clear-shopping-extras', 'POST', {});
     if(res.ok) renderMenuData(await res.json());
 }
 
