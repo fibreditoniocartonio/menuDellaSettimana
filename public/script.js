@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- THEMING SYSTEM ---
-// --- THEMING SYSTEM ---
 function applyTheme() {
     const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
     const body = document.body;
@@ -258,10 +257,11 @@ function openRecipeModal(recipe = null) {
 function addIngredientRow(name = '', qty = '') {
     const div = document.createElement('div');
     div.className = 'ingredient-row';
+    // Nota: Ho rimosso gli stili inline flex per affidarmi al CSS
     div.innerHTML = `
-        <input type="text" placeholder="Ingrediente" class="ing-name" value="${name}" style="flex:2">
-        <input type="text" placeholder="Qtà" class="ing-qty" value="${qty}" style="flex:1">
-        <button class="btn-text" onclick="this.parentElement.remove()">✕</button>
+        <input type="text" placeholder="Ingrediente" class="ing-name" value="${name}">
+        <input type="text" placeholder="Qtà" class="ing-qty" value="${qty}">
+        <button class="btn-remove-ing" onclick="this.parentElement.remove()">✕</button>
     `;
     document.getElementById('ingredients-list').appendChild(div);
 }

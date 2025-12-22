@@ -1,82 +1,79 @@
+/* RESET GLOBALE FONDAMENTALE PER MOBILE */
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 :root {
     /* DEFAULT THEME (Winter/Neutral) */
-    --primary: #4f46e5;       /* Indaco elegante */
+    --primary: #4f46e5;       
     --primary-light: #818cf8;
     --primary-dark: #3730a3;
-    --accent: #f43f5e;        /* Rosa/Rosso per accenti */
-    --bg: #f8fafc;            /* Sfondo pagina molto chiaro */
-    --surface: #ffffff;       /* Sfondo card */
-    --text: #334155;          /* Grigio scuro (più morbido del nero) */
+    --accent: #f43f5e;        
+    --bg: #f8fafc;            
+    --surface: #ffffff;       
+    --text: #334155;          
     --text-light: #94a3b8;
     --border: #e2e8f0;
     
-    /* Etichette Pasti */
     --bg-label-lunch: #e0f2fe;
     --text-label-lunch: #0284c7;
     --bg-label-dinner: #fef3c7;
     --text-label-dinner: #d97706;
     
-    --radius: 16px;           /* Arrotondamento pronunciato */
-    --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); /* Ombra soffice */
+    --radius: 16px;           
+    --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); 
 }
 
 /* --- THEME OVERRIDES --- */
-
-/* NATALE (Dicembre / Inizio Gennaio) */
 body.theme-christmas {
-    --primary: #b91c1c;       /* Rosso Natale */
+    --primary: #b91c1c;       
     --primary-light: #ef4444;
     --primary-dark: #7f1d1d;
-    --accent: #15803d;        /* Verde Pino */
-    --bg: #fef2f2;            /* Sfondo rossastro chiarissimo */
-    --bg-label-lunch: #dcfce7; /* Verde chiaro */
+    --accent: #15803d;        
+    --bg: #fef2f2;            
+    --bg-label-lunch: #dcfce7; 
     --text-label-lunch: #166534;
-    --bg-label-dinner: #fee2e2; /* Rosso chiaro */
+    --bg-label-dinner: #fee2e2; 
     --text-label-dinner: #991b1b;
 }
 
-/* SAN VALENTINO (Febbraio) */
 body.theme-valentine {
-    --primary: #db2777;       /* Rosa intenso */
+    --primary: #db2777;       
     --primary-light: #f472b6;
     --primary-dark: #9d174d;
     --accent: #be123c;
-    --bg: #fff1f2;            /* Rosa chiarissimo */
+    --bg: #fff1f2;            
 }
 
-/* PRIMAVERA (Marzo - Maggio) */
 body.theme-spring {
-    --primary: #10b981;       /* Verde smeraldo */
+    --primary: #10b981;       
     --primary-light: #34d399;
     --primary-dark: #047857;
-    --accent: #f59e0b;        /* Giallo fiore */
-    --bg: #f0fdf4;            /* Verde menta chiarissimo */
+    --accent: #f59e0b;        
+    --bg: #f0fdf4;            
 }
 
-/* ESTATE (Giugno - Agosto) */
 body.theme-summer {
-    --primary: #0ea5e9;       /* Azzurro cielo */
+    --primary: #0ea5e9;       
     --primary-light: #38bdf8;
     --primary-dark: #0369a1;
-    --accent: #facc15;        /* Giallo sole */
+    --accent: #facc15;        
     --bg: #f0f9ff;
 }
 
-/* AUTUNNO (Settembre - Novembre) */
 body.theme-autumn {
-    --primary: #d97706;       /* Arancione zucca */
+    --primary: #d97706;       
     --primary-light: #fbbf24;
     --primary-dark: #92400e;
-    --accent: #78350f;        /* Marrone */
-    --bg: #fffbeb;            /* Crema */
+    --accent: #78350f;        
+    --bg: #fffbeb;            
 }
 
-/* HALLOWEEN (Fine Ottobre) */
 body.theme-halloween {
-    --primary: #9333ea;       /* Viola */
+    --primary: #9333ea;       
     --primary-light: #c084fc;
     --primary-dark: #581c87;
-    --accent: #ea580c;        /* Arancione scuro */
+    --accent: #ea580c;        
     --bg: #faf5ff;
 }
 
@@ -87,13 +84,24 @@ body {
     margin: 0; 
     padding: 0; 
     height: 100vh; 
+    width: 100%;
+    overflow-x: hidden;
     display: flex; 
     flex-direction: column; 
     transition: background-color 0.5s ease;
 }
 
 /* --- LAYOUT --- */
-.view { display: none; flex: 1; overflow-y: auto; width: 100%; max-width: 600px; margin: 0 auto; position: relative; padding-bottom: 80px; }
+.view { 
+    display: none; 
+    flex: 1; 
+    overflow-y: auto; 
+    width: 100%; 
+    max-width: 600px; 
+    margin: 0 auto; 
+    position: relative; 
+    padding-bottom: 80px; 
+}
 .view.active { display: block; }
 .view.padded { padding: 20px; padding-bottom: 100px; }
 .hidden { display: none !important; }
@@ -148,27 +156,49 @@ nav {
 }
 .recipe-card:active { transform: scale(0.98); background: #fafafa; }
 
+/* --- GESTIONE RIGA INGREDIENTI (FIX LAYOUT) --- */
 .ingredient-row {
     display: flex;
-    gap: 8px;
+    gap: 8px; /* Spazio ridotto per stare nei mobile */
     margin-bottom: 8px;
     align-items: center;
+    width: 100%;
 }
 
-/* Sovrascriviamo la larghezza al 100% solo per queste righe */
+/* Gli input dentro la riga ingredienti devono potersi restringere */
 .ingredient-row input {
     margin: 0;
-    width: auto; /* Lascia che flex decida la larghezza */
+    min-width: 0; /* FONDAMENTALE: evita overflow */
+    border-radius: 8px; /* Leggermente meno arrotondati per spazio */
+    padding: 12px 10px; /* Padding ottimizzato */
 }
-.ingredient-row .ing-name { flex: 2; } /* Nome prende più spazio */
-.ingredient-row .ing-qty { flex: 1; }  /* Quantità meno spazio */
+
+/* Proporzioni flessibili */
+.ingredient-row .ing-name { flex: 7; } /* 70% spazio */
+.ingredient-row .ing-qty { flex: 3; }  /* 30% spazio */
+
+/* Bottone X fisso che non si schiaccia */
+.ingredient-row .btn-remove-ing {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    background: #fee2e2;
+    color: #ef4444;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    padding: 0;
+}
+.ingredient-row .btn-remove-ing:hover { background: #fecaca; }
+
 
 /* MENU & SHOPPING UI */
 .tab-header { display: flex; margin: 10px 0 20px; background: rgba(0,0,0,0.05); border-radius: 50px; padding: 5px; }
 .tab-btn { flex: 1; background: transparent; border: none; padding: 10px; border-radius: 40px; font-weight: 600; color: var(--text-light); transition: 0.3s; }
 .tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
 
-/* TAB VISIBILITY */
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
@@ -181,7 +211,6 @@ nav {
     position: relative;
     overflow: hidden;
 }
-/* Linea decorativa laterale */
 .menu-day-card::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--primary-light);
 }
@@ -189,7 +218,6 @@ nav {
 .menu-card-header h4 { margin: 0; color: var(--primary); font-size: 0.9rem; text-transform: uppercase; font-weight: 800; letter-spacing: 1px; }
 .meal-divider { border: 0; border-top: 1px dashed var(--border); margin: 15px 0; }
 
-/* LAYOUT RIGA PASTO (Aggiornato per pulsanti) */
 .meal-row-container {
     display: flex;
     align-items: center;
@@ -210,7 +238,14 @@ nav {
     flex-direction: column;
     justify-content: center;
     line-height: 1.2;
+    min-width: 0; /* Evita overflow del testo ricetta */
 }
+.meal-info span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .meal-controls { display: flex; align-items: center; gap: 4px; }
 
 .small-qty-input { 
@@ -244,34 +279,27 @@ nav {
 
 .checklist li.checked span { text-decoration: line-through; color: var(--text-light); opacity: 0.6; }
 .checklist li.checked { background: transparent; }
-
-/* Extra items highlight */
 .extra-item { background: #fffcf0 !important; }
-
-/* Modified items highlight */
 .modified-qty { color: var(--accent); font-weight: bold; }
 .edit-dot { color: var(--accent); font-size: 0.6rem; margin-left: 2px; vertical-align: middle; }
-
 .check-area { flex: 1; cursor: pointer; display: flex; align-items: center; }
 .qty-area { cursor: pointer; padding: 5px; margin-left: 10px; background: rgba(0,0,0,0.03); border-radius: 6px; min-width: 30px; text-align: center; }
-
-/* Vista Ricetta nella spesa */
 .recipe-shopping-card { background: white; border-radius: 12px; margin-bottom: 15px; box-shadow: var(--shadow); overflow: hidden; }
 .recipe-shopping-header { background: var(--bg); padding: 10px 15px; font-size: 0.9rem; color: var(--primary-dark); border-bottom: 1px solid var(--border); }
 .checklist.compact li { padding: 10px 15px; font-size: 0.9rem; }
 
-/* FORMS E MODALI */
+/* MODALS */
 .modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.7); /* Sfondo scuro bloccante */
+    background: rgba(0,0,0,0.7);
     display: flex;
     justify-content: center;
-    align-items: flex-end; /* O center se preferisci al centro */
-    z-index: 2000; /* Z-index alto per stare sopra a tutto */
+    align-items: flex-end; 
+    z-index: 2000;
 }
 
 .modal-content {
@@ -292,37 +320,20 @@ nav {
     width: 100%;
     margin-bottom: 15px;
 }
-.close-btn {
-    font-size: 2rem;
-    line-height: 1;
-    cursor: pointer;
-    padding: 0 10px;
-}
-
-.modal-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    gap: 10px;
-}
-
-.modal-footer button:last-child {
-    margin-left: auto;
-}
-.modal-footer button:first-child:not(:last-child) + button {
-    margin-left: 0;
-}
+.close-btn { font-size: 2rem; line-height: 1; cursor: pointer; padding: 0 10px; }
+.modal-footer { display: flex; justify-content: space-between; align-items: center; width: 100%; gap: 10px; margin-top: 20px; }
+.modal-footer button:last-child { margin-left: auto; }
+.modal-footer button:first-child:not(:last-child) + button { margin-left: 0; }
 
 @media(min-width: 600px) {
     .modal { align-items: center; }
     .modal-content { border-radius: 20px; margin: 20px; width: 500px; }
 }
 
-/* GESTIONE RIGHE E COLONNE (Fondamentale per il layout interno) */
+/* LAYOUT COLONNE */
 .row {
     display: flex;
-    gap: 15px
+    gap: 15px;
     width: 100%;
 }
 .col {
@@ -330,10 +341,9 @@ nav {
     min-width: 0;
 }
 
-/* CAMPI INPUT */
+/* INPUTS */
 input, select, textarea {
     width: 100%;
-    box-sizing: border-box; /* IMPERATIVO: include il padding nella larghezza totale */
     padding: 14px;
     margin: 8px 0;
     border: 1px solid var(--border);
@@ -342,15 +352,14 @@ input, select, textarea {
     background: #f9f9f9;
     font-family: inherit;
     outline: none;
-    max-width: 100%; /* Sicurezza extra contro lo scroll orizzontale */
+    max-width: 100%; 
 }
 input:focus, select:focus, textarea:focus { background: white; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,0,0,0.05); }
 textarea { resize: vertical; min-height: 80px; }
 
-/* BOTTONI */
+/* BUTTONS */
 button { cursor: pointer; font-size: 0.95rem; border: none; border-radius: 12px; transition: 0.2s; font-weight: 600; font-family: inherit; }
 button:active { transform: scale(0.96); }
-
 .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 14px 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
 .btn-secondary { background: white; color: var(--text); padding: 10px 15px; border: 1px solid var(--border); }
 .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 10px 15px; }
@@ -358,7 +367,6 @@ button:active { transform: scale(0.96); }
 .btn-text { background: none; color: var(--text-light); padding: 5px; }
 .btn-small { padding: 8px 12px; font-size: 0.85rem; }
 .full-width { width: 100%; }
-
 .btn-icon { background: var(--bg); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--text); border: 1px solid transparent; }
 .btn-icon:hover { background: white; border-color: var(--border); color: var(--primary); }
 
@@ -369,5 +377,5 @@ button:active { transform: scale(0.96); }
 .dialog-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
 
 /* LOGIN */
-.login-card { text-align: center; margin-top: 25vh; padding: 40px 30px; background: var(--surface); border-radius: 24px; box-shadow: var(--shadow); }
+.login-card { text-align: center; margin-top: 25vh; padding: 40px 30px; background: var(--surface); border-radius: 24px; box-shadow: var(--shadow); width: 100%; }
 .login-card h1 { font-size: 2.5rem; margin-bottom: 5px; color: var(--primary); }
