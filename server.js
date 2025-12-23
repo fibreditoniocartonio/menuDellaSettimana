@@ -721,17 +721,26 @@ app.get('/api/export-json', checkAuth, (req, res) => {
 });
 
 app.post('/api/import-json', checkAuth, (req, res) => {
-    const recipes = req.body;
+    const { recipes, clear } = req.body;
     if (!Array.isArray(recipes)) return res.status(400).json({ error: "JSON invalid" });
-    const stmt = db.prepare(`INSERT INTO recipes (name, type, servings, ingredients, difficulty, procedure) VALUES (?, ?, ?, ?, ?, ?)`);
+    
     db.serialize(() => {
         db.run("BEGIN TRANSACTION");
+        
+        if (clear) {
+            db.run("DELETE FROM recipes");
+            db.run("DELETE FROM sqlite_sequence WHERE name='recipes'"); // Reset AutoIncrement
+        }
+
+        const stmt = db.prepare(`INSERT INTO recipes (name, type, servings, ingredients, difficulty, procedure) VALUES (?, ?, ?, ?, ?, ?)`);
         recipes.forEach(r => {
             stmt.run(r.name, r.type, r.servings || 2, JSON.stringify(r.ingredients), r.difficulty || 1, r.procedure || "");
         });
-        db.run("COMMIT", () => {
+        
+        db.run("COMMIT", (err) => {
+            if (err) return res.status(500).json({ error: "Errore durante import" });
             stmt.finalize();
-            res.json({ message: "Import OK" });
+            res.json({ message: "Import OK", count: recipes.length });
         });
     });
 });

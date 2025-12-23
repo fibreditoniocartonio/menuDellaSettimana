@@ -7,6 +7,8 @@ let isMenuLoaded = false;
 
 // STATO PER ABBINAMENTI MANUALI
 let pendingPairing = null; // { id: 1, type: 'primo' }
+// STATO PER CONFRONTO IMPORT
+let pendingCompareData = null; // { oldR, newR }
 
 document.addEventListener('DOMContentLoaded', () => {
     applyTheme(); 
@@ -18,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// --- THEMING & UTILS (Invariati) ---
+// --- THEMING & UTILS ---
 function getEasterDate(year) {
     const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
     return { month: Math.floor((h + l - 7 * m + 114) / 31), day: ((h + l - 7 * m + 114) % 31) + 1 };
@@ -46,18 +48,33 @@ function applyTheme() {
 }
 function changeTheme(val) { localStorage.setItem('familyMenuTheme', val); applyTheme(); }
 
-// --- DIALOGS (Invariati) ---
+// --- DIALOGS ---
 function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
     return new Promise((resolve) => {
         const container = document.getElementById('custom-dialog-container');
         let inputField = type === 'prompt' ? `<input type="text" id="dialog-input" value="${defaultValue}" class="full-width" style="margin-top:10px;">` : '';
         const cancelBtn = type !== 'alert' ? `<button class="btn-secondary" id="dialog-cancel">Annulla</button>` : '';
-        // Per confirm con scelta personalizzata (pairing)
-        const customBtns = type === 'pairing' ? 
-            `<button class="btn-secondary" id="dialog-no">No, tieni singolo</button><button class="btn-primary" id="dialog-yes">Sì, scegli abbinamento</button>` : 
-            `${cancelBtn}<button class="btn-primary" id="dialog-ok">OK</button>`;
+        
+        let customBtns = '';
+        if (type === 'pairing') {
+            customBtns = `<button class="btn-secondary" id="dialog-no">No, tieni singolo</button><button class="btn-primary" id="dialog-yes">Sì, scegli abbinamento</button>`;
+        } else if (type === 'conflict') {
+             // Nuova interfaccia conflitto: Confronta (apre scheda), Tieni Vecchia, Sostituisci
+             customBtns = `
+             <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+                <button class="btn-secondary full-width" id="dialog-compare" style="border:1px dashed var(--primary); color:var(--primary);">🔍 Confronta dettagli</button>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-secondary full-width" id="dialog-no">Tieni Vecchia</button>
+                    <button class="btn-primary full-width" id="dialog-yes">Sostituisci</button>
+                </div>
+             </div>`;
+        } else if (type === 'import_choice') {
+             customBtns = `<div style="display:flex; flex-direction:column; gap:10px; width:100%"><button class="btn-primary full-width" id="dialog-yes">Aggiungi (Unisci)</button><button class="btn-danger full-width" id="dialog-no">Sostituisci Tutto (Cancella DB)</button><button class="btn-text full-width" id="dialog-cancel">Annulla</button></div>`;
+        } else {
+             customBtns = `${cancelBtn}<button class="btn-primary" id="dialog-ok">OK</button>`;
+        }
 
-        container.innerHTML = `<div class="custom-dialog-overlay"><div class="custom-dialog-box"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
+        container.innerHTML = `<div class="custom-dialog-overlay" id="dialog-overlay"><div class="custom-dialog-box"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
         
         const ok = document.getElementById('dialog-ok');
         const cancel = document.getElementById('dialog-cancel');
@@ -65,14 +82,26 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         
         const yes = document.getElementById('dialog-yes');
         const no = document.getElementById('dialog-no');
+        const compare = document.getElementById('dialog-compare');
 
         if(input) input.focus();
         const close = (res) => { container.innerHTML = ''; resolve(res); };
 
         if(ok) ok.onclick = () => close(type === 'prompt' ? input.value : true);
         if(cancel) cancel.onclick = () => close(false);
-        if(yes) yes.onclick = () => close('pair');
-        if(no) no.onclick = () => close('single');
+        if(yes) yes.onclick = () => close('yes');
+        if(no) no.onclick = () => close('no');
+        
+        if(type === 'pairing' && yes) yes.onclick = () => close('pair');
+        if(type === 'pairing' && no) no.onclick = () => close('single');
+
+        // Gestione speciale bottone Confronta
+        if(compare) {
+            compare.onclick = () => {
+                // Non chiude il dialog principale, apre un overlay sopra
+                openFullComparisonOverlay();
+            };
+        }
     });
 }
 async function showAlert(m) { await showCustomDialog("Avviso", `<p>${m}</p>`, 'alert'); }
@@ -168,7 +197,7 @@ function filterRecipes() {
     renderRecipeList(recipesCache.filter(r => r.name.toLowerCase().includes(query)));
 }
 
-// --- MODALE RICETTA (Invariato) ---
+// --- MODALE RICETTA ---
 function openRecipeModal(recipe = null) {
     document.getElementById('recipe-modal').classList.remove('hidden');
     const container = document.getElementById('ingredients-list');
@@ -203,7 +232,11 @@ function openRecipeModal(recipe = null) {
         addIngredientRow(); 
         toggleEditMode(); 
     }
-    autoResize(ta);
+    
+    // Fix: Timeout per garantire il corretto calcolo altezza
+    setTimeout(() => {
+        autoResize(ta);
+    }, 50);
 }
 function toggleEditMode() {
     const fs = document.getElementById('recipe-fieldset');
@@ -218,7 +251,8 @@ function toggleEditMode() {
 }
 function autoResize(textarea) {
     textarea.style.height = 'auto';
-    textarea.style.height = textarea.scrollHeight + 'px';
+    // Aggiungo un piccolo buffer (+2) per evitare scatti
+    textarea.style.height = (textarea.scrollHeight + 2) + 'px';
 }
 function addIngredientRow(name = '', qty = '') {
     const div = document.createElement('div');
@@ -260,16 +294,15 @@ async function deleteCurrentRecipe() {
 // --- MENU & DASHBOARD ---
 function showGenerateModal() { document.getElementById('generate-modal').classList.remove('hidden'); }
 async function loadLastMenu() {
-    if (isMenuLoaded && currentMenuData) {
-        showView('view-menu');
-        switchTab('tab-menu');
-        return;
-    }
     const res = await apiCall('/last-menu');
     const data = await res.json();
     if (!data) { await showAlert("Nessun menu salvato."); return; }
     isMenuLoaded = true;
     renderMenuData(data);
+    if(document.getElementById('view-menu').classList.contains('hidden')) {
+        showView('view-menu');
+        switchTab('tab-menu');
+    }
 }
 async function generateMenu() {
     const people = document.getElementById('gen-people').value;
@@ -280,6 +313,22 @@ async function generateMenu() {
         renderMenuData(await res.json());
     } else { const err = await res.json(); await showAlert(err.error); }
 }
+
+// FIX EMOJI: Helper per mappare correttamente tutti i tipi
+function getEmojiForType(type) {
+    if (!type) return '🥘';
+    const t = type.toLowerCase();
+    if (t.includes('primo')) return '🍝';
+    if (t === 'sugo') return '🍅';
+    if (t.includes('secondo')) return '🥩';
+    if (t === 'contorno') return '🥗';
+    if (t === 'antipasto') return '🥟';
+    if (t === 'panificato') return '🥖';
+    if (t === 'dolce') return '🍰';
+    if (t === 'preparazione') return '🥣';
+    return '🥘';
+}
+
 function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     if (!meal) return `<div class="meal-row"><span>---</span></div>`;
     const uniqueId = isExtra ? meal.uniqueId : null;
@@ -297,12 +346,7 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     }
 
     const namesHtml = itemsToRender.map(it => {
-        let typeEmoji = '🥘';
-        if (it.type.includes('primo')) typeEmoji = '🍝';
-        else if (it.type === 'sugo') typeEmoji = '🍅';
-        else if (it.type === 'secondo') typeEmoji = '🥩';
-        else if (it.type === 'contorno') typeEmoji = '🥗';
-        else if (it.type === 'panificato') typeEmoji = '🥖';
+        const typeEmoji = getEmojiForType(it.type); // Usa la nuova funzione
         return `<div style="display:flex; align-items:center; margin-bottom:2px;"><span style="font-size:1rem; font-weight: 500;">${typeEmoji} ${it.name}</span></div>`;
     }).join('');
 
@@ -410,7 +454,7 @@ function renderShoppingList(data) {
         });
         return s;
     };
-    html += `<div class="shopping-section-title">🛒 Lista della Spesa</div><ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
+    html += `<div class="shopping-section-title">🛒 Lista della Spesa <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica">⟲</button></div><ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
     container.innerHTML = html;
 }
 
@@ -664,16 +708,131 @@ function exportJSON() {
         document.body.appendChild(a); a.click(); a.remove(); document.getElementById('backup-modal').classList.add('hidden');
     });
 }
+
+// --- LOGICA IMPORT & CONFRONTO AVANZATA ---
+
+function formatRecipeFull(r) {
+    if(!r) return "<p>Vuoto</p>";
+    const ings = r.ingredients.map(i => `<li><b>${i.name}</b>: ${i.quantity}</li>`).join('');
+    return `
+        <h2 style="margin-top:0; color:var(--primary);">${r.name}</h2>
+        <p style="color:#666;">Tipologia: ${r.type} | Difficoltà: ${r.difficulty}/5</p>
+        <hr>
+        <h4>Ingredienti</h4>
+        <ul>${ings}</ul>
+        <h4>Procedura</h4>
+        <div style="background:#f9f9f9; padding:15px; border-radius:12px; line-height:1.5;">${r.procedure.replace(/\n/g, '<br>')}</div>
+    `;
+}
+
+// Funzione chiamata dal bottone "Confronta" dentro il dialog
+function openFullComparisonOverlay() {
+    if (!pendingCompareData) return;
+    const { oldR, newR } = pendingCompareData;
+
+    // Crea overlay full screen
+    const overlay = document.createElement('div');
+    overlay.className = 'full-compare-modal';
+    overlay.innerHTML = `
+        <div class="full-compare-header">
+            <h3>Confronto Ricette</h3>
+            <button class="btn-text" style="font-size:1.5rem;" onclick="this.closest('.full-compare-modal').remove()">&times;</button>
+        </div>
+        <div class="compare-split">
+            <div class="compare-side old-side">
+                <div class="side-tag">ATTUALE</div>
+                ${formatRecipeFull(oldR)}
+            </div>
+            <div class="compare-side new-side">
+                 <div class="side-tag">BACKUP (NUOVA)</div>
+                ${formatRecipeFull(newR)}
+            </div>
+        </div>
+        <div style="padding:20px; text-align:center;">
+            <button class="btn-secondary" onclick="this.closest('.full-compare-modal').remove()">Chiudi e torna alla scelta</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+async function askConflictResolution(oldR, newR) {
+    pendingCompareData = { oldR, newR };
+    const html = `<p>Trovato conflitto per <b>${newR.name}</b> (${newR.type}).<br>Vuoi vedere le differenze?</p>`;
+    return await showCustomDialog("Conflitto", html, 'conflict');
+}
+
 async function importJSON(el) {
     const file = el.files[0]; if (!file) return;
     const reader = new FileReader();
+    
     reader.onload = async (e) => {
         try {
-            const j = JSON.parse(e.target.result);
-            const res = await apiCall('/import-json', 'POST', j);
-            if (res.ok) { await showAlert("Import completato"); recipesCache = []; loadRecipes(); } 
-            else await showAlert("Errore import");
-        } catch (err) { await showAlert("JSON non valido"); }
+            const importedRecipes = JSON.parse(e.target.result);
+            if (!Array.isArray(importedRecipes)) throw new Error("Formato non valido");
+
+            // 1. Fetch ricette esistenti per confronto
+            const dbRes = await apiCall('/recipes');
+            const dbRecipes = await dbRes.json();
+            
+            // 2. Chiedi Strategia
+            const choice = await showCustomDialog(
+                "Modalità Importazione", 
+                `<p>Hai caricato <b>${importedRecipes.length}</b> ricette.<br>Come vuoi procedere?</p>`, 
+                'import_choice'
+            );
+
+            if (choice === false) { // Annulla
+                el.value = ''; 
+                return;
+            }
+
+            if (choice === 'no') { // "no" mappato a "Sostituisci tutto"
+                if (await showConfirm("⚠️ ATTENZIONE: Questo cancellerà TUTTE le ricette esistenti prima di importare le nuove. Sei sicuro?")) {
+                    const res = await apiCall('/import-json', 'POST', { recipes: importedRecipes, clear: true });
+                    const dat = await res.json();
+                    await showAlert(`Importazione Completa!<br>Inserite: ${dat.count}`);
+                    recipesCache = []; loadRecipes();
+                }
+            } else if (choice === 'yes') { // "yes" mappato a "Unisci"
+                let toInsert = [];
+                let updatedCount = 0;
+                
+                // Mappa per ricerca veloce
+                const dbMap = new Map(dbRecipes.map(r => [r.name.trim().toLowerCase(), r]));
+
+                for (let newR of importedRecipes) {
+                    const key = newR.name.trim().toLowerCase();
+                    if (dbMap.has(key)) {
+                        const oldR = dbMap.get(key);
+                        // Conflitto -> Chiedi all'utente
+                        const decision = await askConflictResolution(oldR, newR);
+                        
+                        if (decision === 'yes') { // Sostituisci
+                             await apiCall(`/recipes/${oldR.id}`, 'PUT', newR);
+                             updatedCount++;
+                        }
+                        // Se 'no', mantieni vecchia (non fare nulla)
+                    } else {
+                        toInsert.push(newR);
+                    }
+                }
+
+                // Inserimento batch dei nuovi
+                let insertedCount = 0;
+                if (toInsert.length > 0) {
+                    const res = await apiCall('/import-json', 'POST', { recipes: toInsert, clear: false });
+                    const dat = await res.json();
+                    insertedCount = dat.count;
+                }
+
+                await showAlert(`Importazione Completa!<br>Nuove aggiunte: ${insertedCount}<br>Aggiornate: ${updatedCount}`);
+                recipesCache = []; loadRecipes();
+            }
+
+        } catch (err) { 
+            console.error(err);
+            await showAlert("Errore durante la lettura del file o JSON non valido."); 
+        }
         el.value = ''; document.getElementById('backup-modal').classList.add('hidden');
     };
     reader.readAsText(file);
