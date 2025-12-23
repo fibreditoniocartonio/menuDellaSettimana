@@ -1,0 +1,578 @@
+[
+    {
+        "name": "Rigatoni",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pasta",
+                "quantity": "300"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Ebollizione: Porta a bollore abbondante acqua (calcola circa 1 litro per ogni 100g di pasta).\n\nSalatura: Aggiungi il sale grosso solo quando l'acqua bolle.\n\nCottura: Versa la pasta, mescola subito e cuoci a fiamma vivace senza coperchio.\n\nControllo: Assaggia la pasta un minuto prima del tempo indicato sulla confezione per assicurarti che sia \"al dente\".\n\nScolatura: Conserva un mestolo di acqua di cottura, scola la pasta e saltala direttamente nel condimento."
+    },
+    {
+        "name": "Spaghetti",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Spaghetti",
+                "quantity": "300"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Ebollizione: Porta a bollore abbondante acqua (calcola circa 1 litro per ogni 100g di pasta).\n\nSalatura: Aggiungi il sale grosso solo quando l'acqua bolle.\n\nCottura: Versa la pasta, mescola subito e cuoci a fiamma vivace senza coperchio.\n\nControllo: Assaggia la pasta un minuto prima del tempo indicato sulla confezione per assicurarti che sia \"al dente\".\n\nScolatura: Conserva un mestolo di acqua di cottura, scola la pasta e saltala direttamente nel condimento."
+    },
+    {
+        "name": "Sugo alla Carbonara",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Guanciale",
+                "quantity": "100"
+            },
+            {
+                "name": "Tuorli",
+                "quantity": "3"
+            },
+            {
+                "name": "Pecorino",
+                "quantity": "50"
+            },
+            {
+                "name": "Pepe",
+                "quantity": "qb"
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "1. La preparazione degli ingredienti\n- Il Guanciale: Prendi il guanciale e rimuovi la cotenna (la parte esterna dura). Taglialo prima a fette spesse circa mezzo centimetro e poi a striscioline (fiammiferi).\n- Il Formaggio: Grattugia finemente il Pecorino Romano. Più è fine, meglio si scioglierà senza creare grumi.\n- La \"Cremina\": In una ciotola media, metti i tuorli d'uovo. Aggiungi quasi tutto il pecorino (tienine un cucchiaio da parte per la decorazione finale) e un’abbondante macinata di pepe nero. Mescola energicamente con una forchetta o una frusta finché non otterrai una pasta densa e omogenea.\n\n2. La cottura del guanciale\nMetti il guanciale in una padella capiente (abbastanza grande da contenere poi anche la pasta) senza aggiungere olio o burro. Accendi il fuoco a fiamma medio-bassa.\nLascia sfrigolare finché il grasso non diventa trasparente e la parte magra diventa croccante.\nTrucco: Quando è pronto, spegni il fuoco e preleva un cucchiaio del grasso fuso del guanciale dalla padella. Versalo nella ciotola con i tuorli e il pecorino e mescola subito. Questo aiuterà a pastorizzare leggermente l'uovo e a creare un’emulsione profumatissima.\n\n3. La pasta\nPorta a bollore una pentola d'acqua. Attenzione al sale: metti meno sale del solito perché il guanciale e il pecorino sono già molto sapidi.\nButta gli spaghetti e cuocili seguendo i tempi sulla confezione, ma scolali 2 minuti prima del tempo indicato (molto al dente).\nImportante: Prima di scolare, conserva un bicchiere di acqua di cottura della pasta.\n\n4. Il segreto della cremosità (Fuori dal fuoco)\nQuesta è la fase cruciale dove molti sbagliano facendo \"l'uovo sodo\".\nScola gli spaghetti e saltali nella padella con il guanciale (a fuoco spento!) per un minuto, in modo che si insaporiscano bene con il grasso.\nAspetta 30 secondi: La padella non deve essere rovente, altrimenti l'uovo si rapprende.\nVersa il composto di uova e pecorino sulla pasta.\nMescola velocemente e continuamente. Se vedi che è troppo asciutta, aggiungi un po' dell'acqua di cottura che avevi messo da parte (un cucchiaio alla volta).\nIl risultato: Il calore residuo della pasta deve sciogliere il formaggio e trasformare l'uovo in una crema vellutata che avvolge ogni singolo spaghetto, senza mai diventare una frittata.\n\n5. Impiattamento\nServi immediatamente nei piatti. Spolvera con il pecorino rimasto e un'ultima macinata di pepe nero fresco.\n"
+    },
+    {
+        "name": "Orata al Forno",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Orata",
+                "quantity": "2"
+            },
+            {
+                "name": "Limone",
+                "quantity": "1"
+            },
+            {
+                "name": "Rosmarino",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Vino bianco",
+                "quantity": "100"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 3,
+        "procedure": "Pulire ed eviscerare le orate. Praticare delle incisioni sui fianchi del pesce e salare sia all'interno che all'esterno.\nInserire nella pancia di ogni pesce del rosmarino e qualche fetta di limone.\nDisporre le orate in una teglia unta d'olio.\nInfornare in forno preriscaldato a 180-190°C per 18-25 minuti. A metà cottura, bagnare con il vino bianco e terminare la cottura."
+    },
+    {
+        "name": "Ragù di Carne alla Bolognese",
+        "type": "sugo",
+        "servings": 6,
+        "ingredients": [
+            {
+                "name": "Sedano",
+                "quantity": "1"
+            },
+            {
+                "name": "Carota",
+                "quantity": "1"
+            },
+            {
+                "name": "Cipolla",
+                "quantity": "1"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "60"
+            },
+            {
+                "name": "Burro",
+                "quantity": "20"
+            },
+            {
+                "name": "Carne Trita",
+                "quantity": "500"
+            },
+            {
+                "name": "Salsiccia",
+                "quantity": "100"
+            },
+            {
+                "name": "Vino rosso",
+                "quantity": "100"
+            },
+            {
+                "name": "Passata di pomodoro",
+                "quantity": "250"
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Pepe",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 3,
+        "procedure": "Tritare finemente sedano, carota e cipolla. In una pentola capiente, rosolarli in olio e burro per circa 5 minuti. Aggiungere la salsiccia sgranata e rosolare ancora.\nUnire la carne trita mista, sgranandola bene, e farla rosolare per circa 10 minuti, finché i suoi liquidi non saranno evaporati. Sfumare con il vino e lasciar evaporare completamente.\nAggiungere la passata di pomodoro. Coprire con un coperchio e far cuocere a fuoco dolce per almeno 2 ore, mescolando di tanto in tanto. Se necessario, aggiungere acqua durante la cottura.\nA fine cottura, regolare di sale e pepe."
+    },
+    {
+        "name": "Gnocchi di patate comperati",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Gnocchi di patate",
+                "quantity": "500"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Preparazione dell'acqua: Riempi una pentola capiente con abbondante acqua e portala a ebollizione.\n\nSalatura: Quando l'acqua raggiunge il bollore, aggiungi il sale grosso.\n\nCottura: Versa delicatamente gli gnocchi nell'acqua. Mescola una sola volta con un cucchiaio di legno, con molta delicatezza, per assicurarti che non si attacchino al fondo.\n\nL'affioramento: Attendi pochi istanti (solitamente 2-3 minuti). Non appena gli gnocchi salgono a galla, sono pronti per essere scolati.\n\nScolatura: Utilizza una schiumarola (mestolo forato) per prelevare gli gnocchi man mano che affiorano. Evita di versarli in uno scolapasta classico per non schiacciarli o rovinarne la consistenza."
+    },
+    {
+        "name": "Ravioli comperati",
+        "type": "primo_completo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Ravioli",
+                "quantity": "250"
+            },
+            {
+                "name": "Burro",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Bollitura: Porta a bollore acqua abbondante, salala e abbassa leggermente la fiamma (un bollore troppo forte potrebbe rompere i ravioli).\n\nCottura: Versa i ravioli e cuoci per il tempo indicato sulla confezione (solitamente 2-4 minuti).\n\nPreparazione condimento: Mentre i ravioli cuociono, sciogli una noce abbondante di burro in una padella capiente finché non spumeggia.\n\nScolatura: Preleva i ravioli con una schiumarola e trasferiscili direttamente nella padella con il burro.\n\nMantecatura: Aggiungi un cucchiaio di acqua di cottura e salta delicatamente per pochi istanti per legare il condimento."
+    },
+    {
+        "name": "Sugo di Pomodoro",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Cipolla",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Passata di pomodoro",
+                "quantity": "300"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Soffritto: In una padella ampia, scalda un filo d'olio extravergine d'oliva con uno spicchio di aglio (intero per toglierlo dopo, o tritato per un sapore più intenso) o della cipolla tritata finemente. Puoi usare anche lo scalogno.\n\nCottura base: Appena l'aglio imbiondisce, versa la passata di pomodoro (o polpa, per un risultato più rustico). Aggiungi un pizzico di sale e, se necessario, una punta di zucchero per correggere l'acidità.\n\nRistretto: Lascia cuocere a fuoco medio-basso per circa 15-20 minuti, mescolando di tanto in tanto, finché il sugo non si sarà addensato e avrà perso l'acqua in eccesso.\n\nUnione: Scola la pasta/gnocchi leggermente al dente e versa direttamente nella padella. Salta il tutto per un minuto aggiungendo, se serve, un goccio d'acqua di cottura per amalgamare."
+    },
+    {
+        "name": "Aglio, Olio e Peperoncino",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Peperoncino",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Pangrattato",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Soffritto: In una padella capiente, scalda l'olio con l’aglio (affettato o schiacciato) e il peperoncino a fuoco bassissimo per non bruciarli.\n\nEmulsione: Aggiungi un mestolo di acqua di cottura all’olio per creare una base cremosa.\n\nSalto: Versa la pasta in padella e finisci di cuocere saltandola vivacemente finché il condimento non si lega bene.\n\nFinitura: Spegni il fuoco, aggiungi il pangrattato e servi. (Volendo puoi farlo tostare prima per renderlo piu gustoso)"
+    },
+    {
+        "name": "Sugo all'Amatriciana",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pancetta",
+                "quantity": "250"
+            },
+            {
+                "name": "Passata di Pomodoro",
+                "quantity": "300"
+            },
+            {
+                "name": "Peperoncino",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "La Pancetta o Guanciale: Taglialo a listarelle e rosolalo in padella a fuoco medio finché il grasso diventa trasparente e la carne croccante. Se vuoi, sfuma con poco vino bianco.\n\nIl sugo: Togli il guanciale dalla padella (lasciando il grasso sciolto), aggiungi il peperoncino e i pelati. Cuoci a fuoco medio per circa 10-15 minuti.\n\nLa pasta: Cuoci la pasta in acqua poco salata (il guanciale/pancetta è già molto sapido).\n\nMantecatura: Scola la pasta al dente e versala nella padella con il sugo. Aggiungi il guanciale croccante messo da parte."
+    },
+    {
+        "name": "Sugo all'Arrabbiata",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Passata di pomodoro",
+                "quantity": "300"
+            },
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Peperoncino",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Soffritto: In una padella scalda l'olio con l'aglio e i peperoncini tritati. Fai soffriggere finché l'aglio non diventa dorato.\n\nSugo: Versa il pomodoro, sala e cuoci a fuoco medio per circa 15 minuti finché non si addensa.\n\nSalto: Versa la pasta direttamente nella padella col sugo e salta a fuoco vivace per un minuto. Servi subito appena pronto."
+    },
+    {
+        "name": "Sugo al Tonno (con Pomodoro)",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Tonno",
+                "quantity": "240"
+            },
+            {
+                "name": "Passata di Pomodoro",
+                "quantity": "300"
+            },
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "Soffritto: Scalda un filo d'olio in una padella con l'aglio. Se ti piacciono, aggiungi ora olive o capperi dissalati.\n\nTonno: Unisci il tonno ben sgocciolato e sgranalo con la forchetta. Lascialo insaporire per un minuto a fuoco medio.\n\nSugo: Versa il pomodoro, aggiusta di sale e cuoci per circa 10-12 minuti finché il sugo non si rapprende.\n\nMantecatura: Versa la pasta nella padella con il sugo e salta per un minuto, aggiungendo un goccio d'acqua di cottura se necessario."
+    },
+    {
+        "name": "Sugo al Tonno (in bianco)",
+        "type": "sugo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Tonno",
+                "quantity": "240"
+            },
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Scorza di Limone",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Peperoncino",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Soffritto: In una padella ampia, scalda 3-4 cucchiai di olio con l'aglio (intero o tritato) e il peperoncino.\n\nTonno: Aggiungi il tonno ben sgocciolato e sgranato. Lascialo insaporire a fuoco basso per un minuto (non di più, altrimenti diventa secco). \n\nL'emulsione: Aggiungi un mestolo di acqua di cottura della pasta nella padella con il tonno per creare una base umida.\n\nMantecatura: Scola la pasta al dente direttamente in padella. Salta a fuoco vivace aggiungendo acqua di cottura quanto basta per rendere il tutto cremoso e non asciutto.\n\nFinitura: Spegni il fuoco, aggiungi la scorza di limone e una macinata di pepe/peperoncino."
+    },
+    {
+        "name": "Penne",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pasta",
+                "quantity": "300"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Ebollizione: Porta a bollore abbondante acqua (calcola circa 1 litro per ogni 100g di pasta).\n\nSalatura: Aggiungi il sale grosso solo quando l'acqua bolle.\n\nCottura: Versa la pasta, mescola subito e cuoci a fiamma vivace senza coperchio.\n\nControllo: Assaggia la pasta un minuto prima del tempo indicato sulla confezione per assicurarti che sia \"al dente\".\n\nScolatura: Conserva un mestolo di acqua di cottura, scola la pasta e saltala direttamente nel condimento."
+    },
+    {
+        "name": "Mezze maniche",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pasta",
+                "quantity": "300"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Ebollizione: Porta a bollore abbondante acqua (calcola circa 1 litro per ogni 100g di pasta).\n\nSalatura: Aggiungi il sale grosso solo quando l'acqua bolle.\n\nCottura: Versa la pasta, mescola subito e cuoci a fiamma vivace senza coperchio.\n\nControllo: Assaggia la pasta un minuto prima del tempo indicato sulla confezione per assicurarti che sia \"al dente\".\n\nScolatura: Conserva un mestolo di acqua di cottura, scola la pasta e saltala direttamente nel condimento."
+    },
+    {
+        "name": "Pipe Rigate",
+        "type": "primo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pasta",
+                "quantity": "300"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Ebollizione: Porta a bollore abbondante acqua (calcola circa 1 litro per ogni 100g di pasta).\n\nSalatura: Aggiungi il sale grosso solo quando l'acqua bolle.\n\nCottura: Versa la pasta, mescola subito e cuoci a fiamma vivace senza coperchio.\n\nControllo: Assaggia la pasta un minuto prima del tempo indicato sulla confezione per assicurarti che sia \"al dente\".\n\nScolatura: Conserva un mestolo di acqua di cottura, scola la pasta e saltala direttamente nel condimento."
+    },
+    {
+        "name": "Pastina",
+        "type": "primo_completo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pastina",
+                "quantity": "200"
+            },
+            {
+                "name": "Dado",
+                "quantity": "1"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "Brodo veloce: Porta l'acqua a bollore in un pentolino, aggiungi il dado e mescola finché non si è sciolto completamente.\n\nCottura: Versa la pastina e cuocila per i minuti indicati sulla confezione, mescolando di tanto in tanto.\n\nCondimento: Spegni il fuoco e aggiungi il parmigiano e l'olio (o il burro).\n\nRiposo: Lascia riposare un minuto nel pentolino prima di servire, così la pastina si assesta e diventa più saporita."
+    },
+    {
+        "name": "Tortellini in brodo (Comperati)",
+        "type": "primo_completo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Tortellini",
+                "quantity": "400"
+            },
+            {
+                "name": "Dado",
+                "quantity": "1"
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "Il brodo: Porta l'acqua a bollore in una pentola, aggiungi i dadi e mescola finché non sono completamente sciolti.\n\nCottura: Versa i tortellini nel brodo bollente. Cuocili per il tempo indicato sulla confezione (solitamente 2-3 minuti per quelli freschi, 10-12 per quelli secchi).\n\nServizio: Spegni il fuoco e lascia riposare un minuto per far stabilizzare i sapori.\n\nFinitura: Servi i tortellini direttamente con il loro brodo in piatti fondi e aggiungi un'abbondante spolverata di parmigiano per chi lo vuole."
+    },
+    {
+        "name": "Hamburger (comperati)",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Hamburger",
+                "quantity": "4"
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Riscaldamento: Scalda bene una padella antiaderente o una piastra (non serve olio se la carne è di buona qualità).\n\nCottura: Cuoci l'hamburger per 3-4 minuti per lato a fuoco medio-alto."
+    },
+    {
+        "name": "Cotoletta (Comperata)",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Cotoletta",
+                "quantity": "4"
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "In padella (più saporite): Un filo d'olio o una piccola noce di burro. Cuoci 3 minuti per lato a fuoco medio finché la panatura è dorata e croccante.\n\nIn forno/Friggitrice ad aria (più leggere): 200°C per circa 12-15 minuti, girandole a metà cottura. Non serve aggiungere grassi."
+    },
+    {
+        "name": "Spinacina",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Spinacina",
+                "quantity": "4"
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "In padella (più saporite): Un filo d'olio o una piccola noce di burro. Cuoci 3 minuti per lato a fuoco medio finché la panatura è dorata e croccante.\n\nIn forno/Friggitrice ad aria (più leggere): 200°C per circa 12-15 minuti, girandole a metà cottura. Non serve aggiungere grassi."
+    },
+    {
+        "name": "Merluzzo impanato (comperato)",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Merluzzi impanati",
+                "quantity": "4"
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "In padella (più saporite): Un filo d'olio o una piccola noce di burro. Cuoci 3 minuti per lato a fuoco medio finché la panatura è dorata e croccante.\n\nIn forno/Friggitrice ad aria (più leggere): 200°C per circa 12-15 minuti, girandole a metà cottura. Non serve aggiungere grassi."
+    },
+    {
+        "name": "Fette di pesce spada alla piastra",
+        "type": "secondo",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pesce spada (surgelato)",
+                "quantity": "600"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Scongelamento: Per un risultato ottimale, passalo in frigo qualche ora prima. Se hai fretta, mettilo (chiuso nel suo sacchetto) sotto acqua fredda corrente.\n\nPreparazione: Asciuga bene la fetta con carta da cucina e spennellala con un filo d'olio.\n\nCottura: Scalda una piastra o padella con un pizzico di sale grosso. Cuoci il pesce per 3-4 minuti per lato."
+    },
+    {
+        "name": "Carciofi in padella",
+        "type": "contorno",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Carciofi surgelati",
+                "quantity": "300"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": " q.b."
+            },
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Scalda l'olio con l'aglio. Versa i carciofi ancora surgelati e falli rosolare per 2 minuti. Sala, copri e cuoci a fuoco medio per 10-12 minuti. Togli il coperchio negli ultimi minuti per asciugare il fondo."
+    },
+    {
+        "name": "Patate al forno/frig. ad aria",
+        "type": "contorno",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Patate",
+                "quantity": "4"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Rosmarino",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Taglia le patate a cubetti o spicchi. Immergile in acqua fredda per 10 minuti (per togliere l'amido), poi asciugale bene. Condiscile in una ciotola con olio, sale e rosmarino. Cuoci a 180°C per 18-20 minuti, scuotendo il cestello a metà cottura finché non sono croccanti."
+    },
+    {
+        "name": "Verdura mista surgelata",
+        "type": "contorno",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Verdura mista surgelata",
+                "quantity": "300"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Aglio",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 1,
+        "procedure": "Versa le verdure ancora surgelate in una padella con un filo d'olio e l'aglio. Copri con un coperchio e cuoci per 5-7 minuti affinché si scongelino col vapore. Togli il coperchio, sala e salta a fuoco vivace per altri 5 minuti per rosolarle bene."
+    },
+    {
+        "name": "Pomodorini ciliegini (in padella)",
+        "type": "contorno",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Pomodori ciliegini ",
+                "quantity": "250"
+            },
+            {
+                "name": "Olio EVO",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            },
+            {
+                "name": "Zucchero",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "Taglia i pomodorini a metà. Scalda l'olio in padella, aggiungi i pomodorini e saltali a fuoco vivace. Aggiungi sale e una punta di zucchero per correggere l'acidità. \nCuoci per 5-8 minuti finché non iniziano ad appassire e a creare un sughetto saporito."
+    },
+    {
+        "name": "Zucchine grigliate",
+        "type": "contorno",
+        "servings": 2,
+        "ingredients": [
+            {
+                "name": "Zucchina",
+                "quantity": "3"
+            },
+            {
+                "name": "Sale",
+                "quantity": "q.b."
+            }
+        ],
+        "difficulty": 2,
+        "procedure": "Taglia le zucchine a fette sottili (nel senso della lunghezza o a rondelle). Scalda bene una piastra o una padella antiaderente, mettendo sale a piacere. Griglia le zucchine 2-3 minuti per lato."
+    }
+]

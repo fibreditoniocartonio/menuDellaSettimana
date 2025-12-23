@@ -122,7 +122,7 @@ const hydrateMenuWithLiveRecipes = (menuState, allRecipes) => {
     return menuState;
 };
 
-// --- LOGICA LISTA DELLA SPESA (MODIFICATA) ---
+// --- LOGICA LISTA DELLA SPESA ---
 const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
@@ -133,14 +133,13 @@ const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName) => {
             total: 0, 
             isQb: false, 
             originalName: name, 
-            usages: [] // Nuovo array per tracciare gli utilizzi
+            usages: [] 
         };
     }
 
-    // Aggiungiamo il dettaglio dell'utilizzo
     list[key].usages.push({
-        context: context,      // Es: "Giorno 1", "Dolce", "Extra"
-        recipe: recipeName,    // Es: "Carbonara"
+        context: context,      
+        recipe: recipeName,    
         qty: isNaN(qtyNum) ? "q.b." : calculatedQty
     });
 
@@ -155,7 +154,6 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people, context
     if (!recipeOrMeal) return;
 
     if (recipeOrMeal.items && Array.isArray(recipeOrMeal.items)) {
-        // Piatto composito (es. Pasta + Sugo)
         recipeOrMeal.items.forEach(subItem => {
             const itemPeople = recipeOrMeal.customServings || people;
             const ratio = itemPeople / (subItem.servings || 2); 
@@ -166,7 +164,6 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people, context
             });
         });
     } else {
-        // Piatto singolo
         const mealPeople = recipeOrMeal.customServings || people;
         const ratio = mealPeople / recipeOrMeal.servings;
         const ingredients = typeof recipeOrMeal.ingredients === 'string' ? JSON.parse(recipeOrMeal.ingredients) : recipeOrMeal.ingredients;
@@ -184,7 +181,6 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
 
     const listCombinedRaw = {};
 
-    // Process Menu Settimanale
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
             const context = `Giorno ${day.day} (${slot === 'lunch' ? 'Pranzo' : 'Cena'})`;
@@ -192,14 +188,12 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
         });
     });
 
-    // Process Extra Meals
     if (extraMeals && Array.isArray(extraMeals)) {
         extraMeals.forEach(meal => {
             processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people, "Extra");
         });
     }
 
-    // Process Dessert
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
@@ -242,7 +236,7 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
                 qty: displayQty,
                 checked: isChecked,
                 isModified: hasOverride,
-                usages: item.usages // Passiamo l'array usages al frontend
+                usages: item.usages 
             };
         });
         return finalObj;
@@ -734,11 +728,25 @@ app.post('/api/set-manual-dessert', checkAuth, (req, res) => {
 });
 
 // IMPORT/EXPORT
-app.get('/api/export-json', checkAuth, (req, res) => {
-    db.all("SELECT name, type, servings, ingredients, difficulty, procedure FROM recipes", [], (err, rows) => {
+// MODIFICA: Export via POST per supportare filtro IDs
+app.post('/api/export-json', checkAuth, (req, res) => {
+    const { ids } = req.body;
+    let sql = "SELECT name, type, servings, ingredients, difficulty, procedure FROM recipes";
+    let params = [];
+    
+    if (ids && Array.isArray(ids) && ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        sql += ` WHERE id IN (${placeholders})`;
+        params = ids;
+    }
+
+    db.all(sql, params, (err, rows) => {
+        if(err) return res.status(500).json({ error: err.message });
         const cleanData = rows.map(r => ({ ...r, ingredients: JSON.parse(r.ingredients) }));
+        const jsonStr = JSON.stringify(cleanData, null, 4);
         res.setHeader('Content-Disposition', 'attachment; filename=backup.json');
-        res.json(cleanData);
+        res.setHeader('Content-Type', 'application/json');
+        res.send(jsonStr);
     });
 });
 

@@ -152,6 +152,7 @@ button:active { transform: scale(0.96); }
 .full-width { width: 100%; }
 .btn-icon { background: var(--bg); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--text); border: 1px solid transparent; }
 .btn-icon:hover { background: white; border-color: var(--border); color: var(--primary); }
+.btn-icon.small { width: 30px; height: 30px; font-size: 0.9rem; }
 .btn-refresh {
     background: transparent;
     color: var(--primary);
@@ -206,4 +207,57 @@ button:active { transform: scale(0.96); }
     font-size: 0.7rem; font-weight: bold;
     padding: 4px 8px; border-radius: 4px;
     background: #f1f5f9; color: #64748b;
+}
+
+/* LISTA MANUALE IMPORT */
+.manual-import-list {
+    text-align: left;
+    max-height: 60vh; /* Aumentato per adattarsi meglio */
+    overflow-y: auto;
+    margin-top: 15px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+.import-row {
+    padding: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.import-row:last-child { border-bottom: none; }
+.import-check-area {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    cursor: pointer;
+    flex-grow: 1;
+    text-align: left;
+}
+.import-check-area input {
+    margin: 0; 
+    width: auto;
+}
+/* Modale largo per import */
+.dialog-wide {
+    max-width: 600px !important;
+    width: 95% !important;
+}
+
+/* LAYOUT CONFLITTO */
+.conflict-buttons-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+.conflict-buttons-row button {
+    flex: 1;
+}
+
+/* BARRA SELEZIONA TUTTO */
+.select-all-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 5px;
 }

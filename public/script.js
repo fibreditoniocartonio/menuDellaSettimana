@@ -6,9 +6,9 @@ let currentMenuData = null;
 let isMenuLoaded = false; 
 
 // STATO PER ABBINAMENTI MANUALI
-let pendingPairing = null; // { id: 1, type: 'primo' }
+let pendingPairing = null; 
 // STATO PER CONFRONTO IMPORT
-let pendingCompareData = null; // { oldR, newR }
+let pendingCompareData = null; 
 
 document.addEventListener('DOMContentLoaded', () => {
     applyTheme(); 
@@ -48,6 +48,46 @@ function applyTheme() {
 }
 function changeTheme(val) { localStorage.setItem('familyMenuTheme', val); applyTheme(); }
 
+// --- LEVENSHTEIN & FUZZY SEARCH ---
+function levenshteinDistance(a, b) {
+    const tmp = [];
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    for (let i = 0; i <= b.length; i++) tmp[i] = [i];
+    for (let j = 0; j <= a.length; j++) tmp[0][j] = j;
+
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                tmp[i][j] = tmp[i - 1][j - 1];
+            } else {
+                tmp[i][j] = Math.min(
+                    tmp[i - 1][j - 1] + 1,
+                    tmp[i][j - 1] + 1,
+                    tmp[i - 1][j] + 1
+                );
+            }
+        }
+    }
+    return tmp[b.length][a.length];
+}
+
+function isFuzzyMatch(str1, str2) {
+    const s1 = str1.trim().toLowerCase();
+    const s2 = str2.trim().toLowerCase();
+    if (s1 === s2) return true;
+    
+    const maxLen = Math.max(s1.length, s2.length);
+    if (maxLen === 0) return true;
+    
+    const dist = levenshteinDistance(s1, s2);
+    // Tolleranza: 20% della lunghezza o max 3 caratteri per parole corte
+    const threshold = Math.max(2, Math.floor(maxLen * 0.2));
+    
+    return dist <= threshold;
+}
+
 // --- DIALOGS ---
 function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
     return new Promise((resolve) => {
@@ -59,22 +99,26 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         if (type === 'pairing') {
             customBtns = `<button class="btn-secondary" id="dialog-no">No, tieni singolo</button><button class="btn-primary" id="dialog-yes">Sì, scegli abbinamento</button>`;
         } else if (type === 'conflict') {
-             // Nuova interfaccia conflitto: Confronta (apre scheda), Tieni Vecchia, Sostituisci
+             // MODIFICA: Bottoni sulla stessa riga
              customBtns = `
              <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
                 <button class="btn-secondary full-width" id="dialog-compare" style="border:1px dashed var(--primary); color:var(--primary);">🔍 Confronta dettagli</button>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-secondary full-width" id="dialog-no">Tieni Vecchia</button>
-                    <button class="btn-primary full-width" id="dialog-yes">Sostituisci</button>
+                <div class="conflict-buttons-row">
+                     <button class="btn-secondary" id="dialog-no">Tieni Vecchia</button>
+                     <button class="btn-primary" id="dialog-keep-both">Tieni Entrambe</button>
+                     <button class="btn-danger" id="dialog-yes">Sostituisci</button>
                 </div>
              </div>`;
         } else if (type === 'import_choice') {
-             customBtns = `<div style="display:flex; flex-direction:column; gap:10px; width:100%"><button class="btn-primary full-width" id="dialog-yes">Aggiungi (Unisci)</button><button class="btn-danger full-width" id="dialog-no">Sostituisci Tutto (Cancella DB)</button><button class="btn-text full-width" id="dialog-cancel">Annulla</button></div>`;
+             customBtns = `<div style="display:flex; flex-direction:column; gap:10px; width:100%"><button class="btn-primary full-width" id="dialog-yes">Aggiungi (Unisci)</button><button class="btn-secondary full-width" id="dialog-manual">Scegli manualmente cosa aggiungere</button><button class="btn-danger full-width" id="dialog-no">Sostituisci Tutto (Cancella DB)</button><button class="btn-text full-width" id="dialog-cancel">Annulla</button></div>`;
         } else {
              customBtns = `${cancelBtn}<button class="btn-primary" id="dialog-ok">OK</button>`;
         }
 
-        container.innerHTML = `<div class="custom-dialog-overlay" id="dialog-overlay"><div class="custom-dialog-box"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
+        // MODIFICA: Aggiunto dialog-wide se è conflitto
+        const wideClass = type === 'conflict' ? 'dialog-wide' : '';
+
+        container.innerHTML = `<div class="custom-dialog-overlay" id="dialog-overlay"><div class="custom-dialog-box ${wideClass}"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
         
         const ok = document.getElementById('dialog-ok');
         const cancel = document.getElementById('dialog-cancel');
@@ -82,6 +126,8 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         
         const yes = document.getElementById('dialog-yes');
         const no = document.getElementById('dialog-no');
+        const manual = document.getElementById('dialog-manual');
+        const keepBoth = document.getElementById('dialog-keep-both');
         const compare = document.getElementById('dialog-compare');
 
         if(input) input.focus();
@@ -91,14 +137,14 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         if(cancel) cancel.onclick = () => close(false);
         if(yes) yes.onclick = () => close('yes');
         if(no) no.onclick = () => close('no');
+        if(manual) manual.onclick = () => close('manual');
+        if(keepBoth) keepBoth.onclick = () => close('keep_both');
         
         if(type === 'pairing' && yes) yes.onclick = () => close('pair');
         if(type === 'pairing' && no) no.onclick = () => close('single');
 
-        // Gestione speciale bottone Confronta
         if(compare) {
             compare.onclick = () => {
-                // Non chiude il dialog principale, apre un overlay sopra
                 openFullComparisonOverlay();
             };
         }
@@ -233,7 +279,6 @@ function openRecipeModal(recipe = null) {
         toggleEditMode(); 
     }
     
-    // Fix: Timeout per garantire il corretto calcolo altezza
     setTimeout(() => {
         autoResize(ta);
     }, 50);
@@ -251,7 +296,6 @@ function toggleEditMode() {
 }
 function autoResize(textarea) {
     textarea.style.height = 'auto';
-    // Aggiungo un piccolo buffer (+2) per evitare scatti
     textarea.style.height = (textarea.scrollHeight + 2) + 'px';
 }
 function addIngredientRow(name = '', qty = '') {
@@ -314,7 +358,6 @@ async function generateMenu() {
     } else { const err = await res.json(); await showAlert(err.error); }
 }
 
-// FIX EMOJI: Helper per mappare correttamente tutti i tipi
 function getEmojiForType(type) {
     if (!type) return '🥘';
     const t = type.toLowerCase();
@@ -346,7 +389,7 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     }
 
     const namesHtml = itemsToRender.map(it => {
-        const typeEmoji = getEmojiForType(it.type); // Usa la nuova funzione
+        const typeEmoji = getEmojiForType(it.type); 
         return `<div style="display:flex; align-items:center; margin-bottom:2px;"><span style="font-size:1rem; font-weight: 500;">${typeEmoji} ${it.name}</span></div>`;
     }).join('');
 
@@ -451,10 +494,8 @@ function renderShoppingList(data) {
             const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
             const rowId = `${cat}-${safeKey}`;
             
-            // Bottone Info utilizzi (solo se ci sono usages)
             let infoBtn = '';
             if (i.usages && i.usages.length > 0) {
-                // Passiamo la chiave (TitleCase) per recuperare i dati al click
                 infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
             }
 
@@ -466,7 +507,6 @@ function renderShoppingList(data) {
     container.innerHTML = html;
 }
 
-// Funzione per mostrare i dettagli utilizzo ingrediente
 function showIngredientDetails(itemKey) {
     if (!currentMenuData || !currentMenuData.shoppingList.main[itemKey]) return;
     const item = currentMenuData.shoppingList.main[itemKey];
@@ -491,7 +531,6 @@ function showIngredientDetails(itemKey) {
 
     showCustomDialog(`${itemKey}`, html, 'alert');
 }
-
 
 // --- ACTIONS & OPTIMISTIC UI ---
 function toggleShoppingItem(cat, item, isExtra, domEl) {
@@ -554,7 +593,7 @@ async function changeDessertPeople(val) {
 // --- MANUAL SELECTION ---
 async function openMealSelector(day, type, extraId = null) {
     contextSelection = { day, type, extraId };
-    pendingPairing = null; // Reset stato abbinamento
+    pendingPairing = null; 
     
     if (recipesCache.length === 0) {
         const res = await apiCall('/recipes');
@@ -622,7 +661,6 @@ function renderManualSelectionList(list) {
 function filterManualSelection() {
     const q = document.getElementById('search-dessert').value.toLowerCase();
     
-    // Se siamo in fase di abbinamento (STEP 2), filtriamo la lista specifica
     if (pendingPairing) {
         let targetType = '';
         if (pendingPairing.type === 'primo') targetType = 'sugo';
@@ -635,7 +673,6 @@ function filterManualSelection() {
         return;
     }
 
-    // Altrimenti logica standard
     let baseList = [];
     if (contextSelection.type === 'dessert') {
         baseList = recipesCache.filter(r => r.type === 'dolce');
@@ -652,12 +689,10 @@ async function selectManualRecipe(id) {
     const selected = recipesCache.find(r => r.id === id);
     if (!selected) return;
 
-    // --- STEP 2: ABBIAMO GIÀ SELEZIONATO IL PRIMO ITEM, QUESTO È IL SECONDO ---
     if (pendingPairing) {
         document.getElementById('select-dessert-modal').classList.add('hidden');
         isMenuLoaded = false;
         
-        // Determina payload base
         const payload = {
             recipeId: pendingPairing.id,
             pairedRecipeId: id
@@ -674,14 +709,12 @@ async function selectManualRecipe(id) {
              if(res.ok) renderMenuData(await res.json());
         }
         
-        pendingPairing = null; // Reset
+        pendingPairing = null; 
         return;
     }
 
-    // --- STEP 1: PRIMA SELEZIONE ---
     const pairableTypes = ['primo', 'sugo', 'secondo', 'contorno'];
     
-    // Se è un tipo che supporta abbinamento, chiediamo all'utente
     if (pairableTypes.includes(selected.type)) {
         let pairType = '';
         if (selected.type === 'primo') pairType = 'sugo';
@@ -692,22 +725,16 @@ async function selectManualRecipe(id) {
         const choice = await showPairingConfirm(selected.type, pairType);
         
         if (choice === 'pair') {
-            // L'utente vuole abbinare.
-            // 1. Salviamo lo stato
             pendingPairing = selected;
-            // 2. Aggiorniamo la modale per mostrare solo la categoria complementare
             document.querySelector('#select-dessert-modal .modal-header h3').innerText = `Scegli ${pairType.charAt(0).toUpperCase() + pairType.slice(1)}`;
             document.getElementById('search-dessert').value = '';
             
-            // Filtra e mostra solo la categoria target
             const filtered = recipesCache.filter(r => r.type === pairType);
             renderManualSelectionList(filtered);
-            return; // Interrompiamo qui, aspettiamo il secondo click
+            return; 
         }
-        // Se choice === 'single' o annullato, proseguiamo con l'invio singolo qui sotto
     }
 
-    // INVIO SINGOLO (Standard)
     document.getElementById('select-dessert-modal').classList.add('hidden');
     isMenuLoaded = false;
 
@@ -736,15 +763,40 @@ async function removeManualMeal(uniqueId) {
 
 // IMPORT/EXPORT
 function showBackupModal() { document.getElementById('backup-modal').classList.remove('hidden'); }
-function exportJSON() {
-    fetch(`${API_URL}/export-json`, { headers: { 'Authorization': authToken } }).then(res => res.blob()).then(blob => {
+
+// MODIFICA: Export con selezione
+async function exportJSON() {
+    // 1. Carica le ricette se non sono in cache
+    if (recipesCache.length === 0) {
+        const res = await apiCall('/recipes');
+        recipesCache = await res.json();
+    }
+
+    // 2. Mostra il selettore
+    const selected = await showRecipeSelectionDialog(recipesCache, "Esporta Ricette", "Esporta Selezionate");
+    if (!selected) return; // Annullato
+
+    // 3. Prepara gli IDs (se null/empty esporta tutto server side, ma qui mandiamo lista)
+    const payload = {};
+    if (selected.length < recipesCache.length) {
+        // Se non sono tutte, manda gli ID. Altrimenti manda payload vuoto (o undefined) per scaricare tutto
+        payload.ids = selected.map(r => r.id);
+    }
+
+    // 4. Richiesta POST e download blob
+    const res = await apiCall('/export-json', 'POST', payload);
+    if(res.ok) {
+        const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a); a.click(); a.remove(); document.getElementById('backup-modal').classList.add('hidden');
-    });
+        document.body.appendChild(a); a.click(); a.remove(); 
+        document.getElementById('backup-modal').classList.add('hidden');
+    } else {
+        await showAlert("Errore durante l'export.");
+    }
 }
 
-// --- LOGICA IMPORT & CONFRONTO AVANZATA ---
+// --- LOGICA IMPORT AVANZATA ---
 
 function formatRecipeFull(r) {
     if(!r) return "<p>Vuoto</p>";
@@ -760,12 +812,10 @@ function formatRecipeFull(r) {
     `;
 }
 
-// Funzione chiamata dal bottone "Confronta" dentro il dialog
 function openFullComparisonOverlay() {
     if (!pendingCompareData) return;
     const { oldR, newR } = pendingCompareData;
 
-    // Crea overlay full screen
     const overlay = document.createElement('div');
     overlay.className = 'full-compare-modal';
     overlay.innerHTML = `
@@ -790,9 +840,102 @@ function openFullComparisonOverlay() {
     document.body.appendChild(overlay);
 }
 
+function openManualPreview(r) {
+    const html = formatRecipeFull(r);
+    const overlay = document.createElement('div');
+    overlay.className = 'custom-dialog-overlay';
+    overlay.style.zIndex = '3000'; 
+    
+    overlay.innerHTML = `
+        <div class="custom-dialog-box" style="text-align:left; max-width:500px; width:95%; max-height:80vh; overflow-y:auto;">
+            ${html}
+            <div class="dialog-buttons">
+                <button class="btn-primary" id="close-preview-btn">Chiudi</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+    
+    document.getElementById('close-preview-btn').onclick = () => {
+        document.body.removeChild(overlay);
+    };
+}
+
+// MODIFICA: Funzione generica per selezione ricette (usata da Import ed Export)
+function showRecipeSelectionDialog(recipes, title, confirmLabel) {
+    return new Promise((resolve) => {
+        const container = document.getElementById('custom-dialog-container');
+        const sorted = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
+        
+        let listHtml = `<div class="manual-import-list">`;
+        sorted.forEach((r, idx) => {
+            listHtml += `
+            <div class="import-row">
+                <label class="import-check-area">
+                    <input type="checkbox" class="import-cb" value="${idx}">
+                    <span>${r.name}</span>
+                </label>
+                <button class="btn-icon small" title="Leggi" id="preview-${idx}">📖</button>
+            </div>`;
+        });
+        listHtml += `</div>`;
+
+        container.innerHTML = `
+        <div class="custom-dialog-overlay">
+            <div class="custom-dialog-box dialog-wide">
+                <h3>${title}</h3>
+                <div class="select-all-bar">
+                    <button class="btn-small btn-secondary" id="toggle-all-btn">Seleziona/Deseleziona Tutto</button>
+                    <span style="font-size:0.8rem; color:#666;">${sorted.length} ricette</span>
+                </div>
+                ${listHtml}
+                <div class="dialog-buttons">
+                    <button class="btn-secondary" id="sel-cancel">Annulla</button>
+                    <button class="btn-primary" id="sel-confirm">${confirmLabel}</button>
+                </div>
+            </div>
+        </div>`;
+
+        // Event listeners per preview
+        sorted.forEach((r, idx) => {
+            document.getElementById(`preview-${idx}`).onclick = (e) => {
+                e.stopPropagation(); 
+                openManualPreview(r);
+            };
+        });
+
+        // Event listener Select All
+        document.getElementById('toggle-all-btn').onclick = () => {
+            const cbs = document.querySelectorAll('.import-cb');
+            // Se tutte sono checkate, deseleziona tutto. Altrimenti seleziona tutto.
+            const allChecked = Array.from(cbs).every(cb => cb.checked);
+            cbs.forEach(cb => cb.checked = !allChecked);
+        };
+
+        document.getElementById('sel-cancel').onclick = () => {
+            container.innerHTML = '';
+            resolve(null);
+        };
+
+        document.getElementById('sel-confirm').onclick = () => {
+            const checkboxes = document.querySelectorAll('.import-cb:checked');
+            const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            const selectedRecipes = selectedIndices.map(i => sorted[i]);
+            container.innerHTML = '';
+            resolve(selectedRecipes);
+        };
+    });
+}
+
+// MODIFICA: Wrapper per retrocompatibilità
+async function showManualImportSelector(recipes) {
+    return showRecipeSelectionDialog(recipes, "Importa Manuale", "Importa Selezionate");
+}
+
 async function askConflictResolution(oldR, newR) {
     pendingCompareData = { oldR, newR };
-    const html = `<p>Trovato conflitto per <b>${newR.name}</b> (${newR.type}).<br>Vuoi vedere le differenze?</p>`;
+    const html = `<p>Trovato conflitto per <b>${newR.name}</b><br><small>(Simile a: ${oldR.name})</small><br>Vuoi vedere le differenze?</p>`;
     return await showCustomDialog("Conflitto", html, 'conflict');
 }
 
@@ -802,67 +945,83 @@ async function importJSON(el) {
     
     reader.onload = async (e) => {
         try {
-            const importedRecipes = JSON.parse(e.target.result);
+            let importedRecipes = JSON.parse(e.target.result);
             if (!Array.isArray(importedRecipes)) throw new Error("Formato non valido");
 
-            // 1. Fetch ricette esistenti per confronto
             const dbRes = await apiCall('/recipes');
             const dbRecipes = await dbRes.json();
             
-            // 2. Chiedi Strategia
             const choice = await showCustomDialog(
                 "Modalità Importazione", 
                 `<p>Hai caricato <b>${importedRecipes.length}</b> ricette.<br>Come vuoi procedere?</p>`, 
                 'import_choice'
             );
 
-            if (choice === false) { // Annulla
+            if (choice === false) { 
                 el.value = ''; 
                 return;
             }
 
-            if (choice === 'no') { // "no" mappato a "Sostituisci tutto"
-                if (await showConfirm("⚠️ ATTENZIONE: Questo cancellerà TUTTE le ricette esistenti prima di importare le nuove. Sei sicuro?")) {
+            if (choice === 'no') { 
+                if (await showConfirm("⚠️ ATTENZIONE: Questo cancellerà TUTTE le ricette esistenti. Sicuro?")) {
                     const res = await apiCall('/import-json', 'POST', { recipes: importedRecipes, clear: true });
                     const dat = await res.json();
                     await showAlert(`Importazione Completa!<br>Inserite: ${dat.count}`);
                     recipesCache = []; loadRecipes();
                 }
-            } else if (choice === 'yes') { // "yes" mappato a "Unisci"
-                let toInsert = [];
-                let updatedCount = 0;
-                
-                // Mappa per ricerca veloce
-                const dbMap = new Map(dbRecipes.map(r => [r.name.trim().toLowerCase(), r]));
+                el.value = ''; 
+                document.getElementById('backup-modal').classList.add('hidden');
+                return;
+            }
 
-                for (let newR of importedRecipes) {
-                    const key = newR.name.trim().toLowerCase();
-                    if (dbMap.has(key)) {
-                        const oldR = dbMap.get(key);
-                        // Conflitto -> Chiedi all'utente
-                        const decision = await askConflictResolution(oldR, newR);
-                        
-                        if (decision === 'yes') { // Sostituisci
-                             await apiCall(`/recipes/${oldR.id}`, 'PUT', newR);
-                             updatedCount++;
-                        }
-                        // Se 'no', mantieni vecchia (non fare nulla)
-                    } else {
-                        toInsert.push(newR);
+            let recipesToProcess = importedRecipes;
+
+            if (choice === 'manual') {
+                const selected = await showManualImportSelector(importedRecipes);
+                if (!selected || selected.length === 0) {
+                    el.value = ''; return; 
+                }
+                recipesToProcess = selected;
+            }
+
+            let toInsert = [];
+            let updatedCount = 0;
+            let skippedCount = 0;
+
+            for (let newR of recipesToProcess) {
+                let match = null;
+                for (let dbR of dbRecipes) {
+                    if (isFuzzyMatch(dbR.name, newR.name)) {
+                        match = dbR;
+                        break;
                     }
                 }
 
-                // Inserimento batch dei nuovi
-                let insertedCount = 0;
-                if (toInsert.length > 0) {
-                    const res = await apiCall('/import-json', 'POST', { recipes: toInsert, clear: false });
-                    const dat = await res.json();
-                    insertedCount = dat.count;
+                if (match) {
+                    const decision = await askConflictResolution(match, newR);
+                    
+                    if (decision === 'yes') { 
+                         await apiCall(`/recipes/${match.id}`, 'PUT', newR);
+                         updatedCount++;
+                    } else if (decision === 'keep_both') { 
+                        toInsert.push(newR);
+                    } else { 
+                        skippedCount++;
+                    }
+                } else {
+                    toInsert.push(newR);
                 }
-
-                await showAlert(`Importazione Completa!<br>Nuove aggiunte: ${insertedCount}<br>Aggiornate: ${updatedCount}`);
-                recipesCache = []; loadRecipes();
             }
+
+            let insertedCount = 0;
+            if (toInsert.length > 0) {
+                const res = await apiCall('/import-json', 'POST', { recipes: toInsert, clear: false });
+                const dat = await res.json();
+                insertedCount = dat.count;
+            }
+
+            await showAlert(`Importazione Completa!<br>Nuove aggiunte: ${insertedCount}<br>Aggiornate: ${updatedCount}<br>Ignorate: ${skippedCount}`);
+            recipesCache = []; loadRecipes();
 
         } catch (err) { 
             console.error(err);
