@@ -122,40 +122,57 @@ const hydrateMenuWithLiveRecipes = (menuState, allRecipes) => {
     return menuState;
 };
 
-// --- LOGICA LISTA DELLA SPESA ---
-const updateShoppingItem = (list, name, qtyRaw, ratio) => {
+// --- LOGICA LISTA DELLA SPESA (MODIFICATA) ---
+const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
+    const calculatedQty = isNaN(qtyNum) ? 0 : (qtyNum * ratio);
     
-    if (!list[key]) list[key] = { total: 0, isQb: false, originalName: name };
+    if (!list[key]) {
+        list[key] = { 
+            total: 0, 
+            isQb: false, 
+            originalName: name, 
+            usages: [] // Nuovo array per tracciare gli utilizzi
+        };
+    }
+
+    // Aggiungiamo il dettaglio dell'utilizzo
+    list[key].usages.push({
+        context: context,      // Es: "Giorno 1", "Dolce", "Extra"
+        recipe: recipeName,    // Es: "Carbonara"
+        qty: isNaN(qtyNum) ? "q.b." : calculatedQty
+    });
 
     if (isNaN(qtyNum)) {
         list[key].isQb = true;
     } else {
-        list[key].total += (qtyNum * ratio);
+        list[key].total += calculatedQty;
     }
 };
 
-const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people) => {
+const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people, contextLabel) => {
     if (!recipeOrMeal) return;
 
     if (recipeOrMeal.items && Array.isArray(recipeOrMeal.items)) {
+        // Piatto composito (es. Pasta + Sugo)
         recipeOrMeal.items.forEach(subItem => {
             const itemPeople = recipeOrMeal.customServings || people;
             const ratio = itemPeople / (subItem.servings || 2); 
             const ingredients = typeof subItem.ingredients === 'string' ? JSON.parse(subItem.ingredients) : subItem.ingredients;
             
             ingredients.forEach(ing => {
-                updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, ratio);
+                updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, ratio, contextLabel, subItem.name);
             });
         });
     } else {
+        // Piatto singolo
         const mealPeople = recipeOrMeal.customServings || people;
         const ratio = mealPeople / recipeOrMeal.servings;
         const ingredients = typeof recipeOrMeal.ingredients === 'string' ? JSON.parse(recipeOrMeal.ingredients) : recipeOrMeal.ingredients;
         
         ingredients.forEach(ing => {
-            updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, ratio);
+            updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, ratio, contextLabel, recipeOrMeal.name);
         });
     }
 };
@@ -167,23 +184,27 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
 
     const listCombinedRaw = {};
 
+    // Process Menu Settimanale
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
-            processRecipeForShopping(day[slot], listCombinedRaw, people);
+            const context = `Giorno ${day.day} (${slot === 'lunch' ? 'Pranzo' : 'Cena'})`;
+            processRecipeForShopping(day[slot], listCombinedRaw, people, context);
         });
     });
 
+    // Process Extra Meals
     if (extraMeals && Array.isArray(extraMeals)) {
         extraMeals.forEach(meal => {
-            processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people);
+            processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people, "Extra");
         });
     }
 
+    // Process Dessert
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
         ingredients.forEach(ing => {
-            updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, dRatio);
+            updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, dRatio, "Dolce", dessert.name);
         });
     }
 
@@ -220,7 +241,8 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
             finalObj[titleKey] = {
                 qty: displayQty,
                 checked: isChecked,
-                isModified: hasOverride
+                isModified: hasOverride,
+                usages: item.usages // Passiamo l'array usages al frontend
             };
         });
         return finalObj;

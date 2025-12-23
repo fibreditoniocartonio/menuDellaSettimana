@@ -450,13 +450,48 @@ function renderShoppingList(data) {
             const i = listObj[k];
             const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
             const rowId = `${cat}-${safeKey}`;
-            s += `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('${cat}', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area" onclick="editShoppingQty('${cat}', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</div></li>`;
+            
+            // Bottone Info utilizzi (solo se ci sono usages)
+            let infoBtn = '';
+            if (i.usages && i.usages.length > 0) {
+                // Passiamo la chiave (TitleCase) per recuperare i dati al click
+                infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
+            }
+
+            s += `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('${cat}', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area">${infoBtn}<span onclick="editShoppingQty('${cat}', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</span></div></li>`;
         });
         return s;
     };
     html += `<div class="shopping-section-title">🛒 Lista della Spesa <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica">⟲</button></div><ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
     container.innerHTML = html;
 }
+
+// Funzione per mostrare i dettagli utilizzo ingrediente
+function showIngredientDetails(itemKey) {
+    if (!currentMenuData || !currentMenuData.shoppingList.main[itemKey]) return;
+    const item = currentMenuData.shoppingList.main[itemKey];
+    
+    if (!item.usages || item.usages.length === 0) return;
+
+    let html = `<ul style="padding-left:0; list-style:none;">`;
+    item.usages.forEach(u => {
+        let roundedQty = u.qty;
+        if (typeof u.qty === 'number') {
+            roundedQty = Math.round(u.qty * 100) / 100;
+        }
+        html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; flex-direction:column;">
+                <span style="font-weight:bold; color:var(--primary); font-size:0.9rem;">${u.recipe}</span>
+                <span style="font-size:0.75rem; color:#666;">${u.context}</span>
+            </div>
+            <span style="font-weight:bold; background:#eee; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
+        </li>`;
+    });
+    html += `</ul>`;
+
+    showCustomDialog(`${itemKey}`, html, 'alert');
+}
+
 
 // --- ACTIONS & OPTIMISTIC UI ---
 function toggleShoppingItem(cat, item, isExtra, domEl) {
