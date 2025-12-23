@@ -111,13 +111,16 @@
                     <div class="col">
                         <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tipo</label>
                         <select id="rec-type">
-                            <option value="primo">🍝 Primo</option>
-                            <option value="secondo">🥩 Secondo</option>
-                            <option value="contorno">🥗 Contorno</option>
-                            <option value="secondo_completo">🥘 Secondo Completo</option>
                             <option value="antipasto">🥟 Antipasto/Torta Salata</option>
-                            <option value="preparazione">🥣 Preparazione/Altro</option>
+                            <option value="primo">🍚 Primo Semplice</option>
+                            <option value="sugo">🍅 Sugo/Salsa per primi</option>
+                            <option value="primo_completo">🍝 Primo Completo</option>
+                            <option value="secondo">🥩 Secondo Semplice</option>
+                            <option value="contorno">🍟 Contorno</option>
+                            <option value="secondo_completo">🥘 Secondo Completo</option>
                             <option value="dolce">🍰 Dolce</option>
+                            <option value="panificato">🥖 Panificati e Accompagnamenti</option>
+                            <option value="preparazione">🥣 Preparazione/Altro</option>
                         </select>
                     </div>
                     <div class="col">
@@ -146,13 +149,8 @@
             </fieldset>
 
             <div class="modal-footer">
-                <!-- Bottone Delete (solo in edit mode) -->
                 <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none; margin-right:auto;">Elimina</button>
-                
-                <!-- Toggle Edit -->
                 <button class="btn-secondary" id="btn-edit-toggle" onclick="toggleEditMode()">✏️ Modifica</button>
-                
-                <!-- Save -->
                 <button class="btn-primary" id="btn-save-rec" onclick="saveRecipe()" style="display:none;">Salva</button>
             </div>
             <div style="height:20px;"></div>

@@ -63,11 +63,9 @@ const checkAuth = (req, res, next) => {
 // UTILS
 const toTitleCase = (str) => str.replace(/\b\w/g, l => l.toUpperCase());
 
-// Algoritmo Ponderato
 const getWeightedRandom = (items, usedIds) => {
-    // Filtra items già usati se possibile, altrimenti resetta pool locale per questa scelta
     let pool = items.filter(r => !usedIds.has(r.id));
-    if (pool.length === 0) pool = items; // Se finiti, riusa tutti
+    if (pool.length === 0) pool = items; 
     if (pool.length === 0) return null;
 
     const weightedPool = [];
@@ -83,7 +81,48 @@ const getWeightedRandom = (items, usedIds) => {
     return selected;
 };
 
-// --- LOGICA LISTA DELLA SPESA AVANZATA ---
+// --- LOGICA AGGIORNAMENTO DATI (HYDRATION) ---
+const hydrateMenuWithLiveRecipes = (menuState, allRecipes) => {
+    if (!menuState) return null;
+    const recipeMap = new Map(allRecipes.map(r => [r.id, r]));
+
+    const refreshItem = (item) => {
+        if (!item) return item;
+        if (item.items && Array.isArray(item.items)) {
+            item.items = item.items.map(sub => refreshItem(sub));
+            return item; 
+        }
+        if (item.id && recipeMap.has(item.id)) {
+            const live = recipeMap.get(item.id);
+            return {
+                ...item,
+                name: live.name,
+                type: live.type,
+                servings: live.servings, 
+                ingredients: JSON.parse(live.ingredients),
+                difficulty: live.difficulty,
+                procedure: live.procedure
+            };
+        }
+        return item;
+    };
+
+    if (menuState.menu) {
+        menuState.menu.forEach(day => {
+            day.lunch = refreshItem(day.lunch);
+            day.dinner = refreshItem(day.dinner);
+        });
+    }
+    if (menuState.extraMeals) {
+        menuState.extraMeals = menuState.extraMeals.map(m => refreshItem(m));
+    }
+    if (menuState.dessert) {
+        menuState.dessert = refreshItem(menuState.dessert);
+    }
+    return menuState;
+};
+
+// --- LOGICA LISTA DELLA SPESA ---
 const updateShoppingItem = (list, name, qtyRaw, ratio) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
@@ -97,17 +136,13 @@ const updateShoppingItem = (list, name, qtyRaw, ratio) => {
     }
 };
 
-// Helper per processare ricette singole o array di items (composite)
 const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people) => {
     if (!recipeOrMeal) return;
 
-    // Se è un pasto composito (es. Secondo + Contorno) ha la proprietà 'items'
     if (recipeOrMeal.items && Array.isArray(recipeOrMeal.items)) {
         recipeOrMeal.items.forEach(subItem => {
-            // Ricorsione per ogni sotto-elemento
-            // Nota: customServings si applica al gruppo, quindi lo passiamo
             const itemPeople = recipeOrMeal.customServings || people;
-            const ratio = itemPeople / (subItem.servings || 2); // fallback servings
+            const ratio = itemPeople / (subItem.servings || 2); 
             const ingredients = typeof subItem.ingredients === 'string' ? JSON.parse(subItem.ingredients) : subItem.ingredients;
             
             ingredients.forEach(ing => {
@@ -115,7 +150,6 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people) => {
             });
         });
     } else {
-        // Ricetta singola standard
         const mealPeople = recipeOrMeal.customServings || people;
         const ratio = mealPeople / recipeOrMeal.servings;
         const ingredients = typeof recipeOrMeal.ingredients === 'string' ? JSON.parse(recipeOrMeal.ingredients) : recipeOrMeal.ingredients;
@@ -129,27 +163,23 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people) => {
 function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople, oldState = {}) {
     const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
     const overrides = oldState.shoppingOverrides || {};
-    const extras = oldState.shoppingExtras || []; // Lista manuale (carta igienica, ecc.)
+    const extras = oldState.shoppingExtras || []; 
 
     const listCombinedRaw = {};
 
-    // 1. Pasti Settimanali
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
             processRecipeForShopping(day[slot], listCombinedRaw, people);
         });
     });
 
-    // 2. Pasti Extra (Aggiunti manualmente)
     if (extraMeals && Array.isArray(extraMeals)) {
         extraMeals.forEach(meal => {
             processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people);
         });
     }
 
-    // 3. Dolce
     if(dessert) {
-        // Il dolce è trattato come una ricetta singola
         const dRatio = (dessertPeople || people) / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
         ingredients.forEach(ing => {
@@ -157,7 +187,6 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
         });
     }
 
-    // Formattazione finale
     const formatList = (rawList, oldListRef, category) => {
         const finalObj = {};
         Object.keys(rawList).sort().forEach(k => {
@@ -198,9 +227,7 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
     };
 
     return {
-        shoppingList: {
-            main: formatList(listCombinedRaw, oldMain, 'main') 
-        },
+        shoppingList: { main: formatList(listCombinedRaw, oldMain, 'main') },
         shoppingOverrides: overrides,
         shoppingExtras: extras 
     };
@@ -261,14 +288,10 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
 
     db.get("SELECT data FROM menu_state WHERE id = 1", (errState, rowState) => {
         let preservedExtras = [];
-        let shoppingOverrides = {}; // Manteniamo gli override se possibile, o reset? Meglio reset su genera nuovo.
-        
-        // Manteniamo solo la lista spesa manuale (carta igienica, etc), non i piatti extra
         if (!errState && rowState && rowState.data) {
             try {
                 const oldData = JSON.parse(rowState.data);
                 if (oldData.shoppingExtras) preservedExtras = [...oldData.shoppingExtras];
-                // Nota: extraMeals (piatti manuali) vengono resettati come richiesto.
             } catch (e) {}
         }
 
@@ -278,13 +301,15 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             
             const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
             
-            // Categorie richieste
-            const primi = allRecipes.filter(r => r.type === 'primo');
+            const primiSemplici = allRecipes.filter(r => r.type === 'primo');
+            const primiCompleti = allRecipes.filter(r => r.type === 'primo_completo');
+            const sughi = allRecipes.filter(r => r.type === 'sugo');
+            
             const secondi = allRecipes.filter(r => r.type === 'secondo');
             const contorni = allRecipes.filter(r => r.type === 'contorno');
             const secondiCompleti = allRecipes.filter(r => r.type === 'secondo_completo');
+            
             const dolci = allRecipes.filter(r => r.type === 'dolce');
-            // Antipasti e preparazioni non usati nel menu automatico per ora, ma disponibili per manuale
 
             const weekMenu = [];
             const usedIds = new Set(); 
@@ -292,41 +317,47 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             for (let i = 0; i < 7; i++) {
                 const dayMenu = { day: i + 1, lunch: null, dinner: null };
                 
-                // PRANZO: Sempre Primo (per ora, futuro estendibile a array)
-                const pickedPrimo = getWeightedRandom(primi, usedIds);
-                // Salviamo come oggetto singolo per compatibilità, o array items per coerenza?
-                // Manteniamo struttura singola se semplice, ma la UI ora supporta items.
-                // Per uniformità usiamo items anche qui? No, lasciamo misto per ora:
-                // Se items esiste è composito, altrimenti singolo.
-                dayMenu.lunch = pickedPrimo;
+                // --- PRANZO ---
+                const useCompleteLunch = (Math.random() > 0.6 && primiCompleti.length > 0) || (primiSemplici.length === 0);
+                if (useCompleteLunch) {
+                    dayMenu.lunch = getWeightedRandom(primiCompleti, usedIds);
+                } else {
+                    const p = getWeightedRandom(primiSemplici, usedIds);
+                    const s = getWeightedRandom(sughi, usedIds);
+                    if (p) {
+                        if (s) {
+                             dayMenu.lunch = {
+                                isComposite: true,
+                                name: `${p.name} al ${s.name}`, 
+                                items: [p, s],
+                                difficulty: Math.max(p.difficulty, s.difficulty)
+                            };
+                        } else {
+                            dayMenu.lunch = p;
+                        }
+                    }
+                }
 
-                // CENA: Algoritmo Scelta
-                // Opzione A: Secondo Completo
-                // Opzione B: Secondo + Contorno
-                // Probabilità 50% (se ci sono abbastanza ricette)
-                const useComplete = (Math.random() > 0.5 && secondiCompleti.length > 0) || (secondi.length === 0);
-                
-                if (useComplete && secondiCompleti.length > 0) {
+                // --- CENA ---
+                const useCompleteDinner = (Math.random() > 0.5 && secondiCompleti.length > 0) || (secondi.length === 0);
+                if (useCompleteDinner && secondiCompleti.length > 0) {
                     dayMenu.dinner = getWeightedRandom(secondiCompleti, usedIds);
                 } else {
-                    // Secondo + Contorno
                     const sec = getWeightedRandom(secondi, usedIds);
-                    const cont = getWeightedRandom(contorni, usedIds); // I contorni si possono ripetere più facilmente? Usiamo same usedIds
-                    
+                    const cont = getWeightedRandom(contorni, usedIds); 
                     if (sec) {
                         if (cont) {
-                            // Creiamo oggetto composito
                             dayMenu.dinner = {
                                 isComposite: true,
-                                name: `${sec.name} + ${cont.name}`, // Nome visuale fallback
+                                name: `${sec.name} + ${cont.name}`,
                                 items: [sec, cont],
                                 difficulty: Math.max(sec.difficulty, cont.difficulty)
                             };
                         } else {
-                            dayMenu.dinner = sec; // Solo secondo se mancano contorni
+                            dayMenu.dinner = sec;
                         }
                     } else {
-                        dayMenu.dinner = null; // Fallback estremo
+                        dayMenu.dinner = null;
                     }
                 }
                 weekMenu.push(dayMenu);
@@ -334,7 +365,7 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
 
             const selectedDessert = getWeightedRandom(dolci, new Set()); 
             const dessertPeople = people;
-            const extraMeals = []; // Vuoto su nuova generazione
+            const extraMeals = []; 
 
             const tempState = { shoppingExtras: preservedExtras, shoppingOverrides: {} };
 
@@ -360,8 +391,14 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
 
 app.get('/api/last-menu', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
-        if (!row) return res.json(null);
-        res.json(JSON.parse(row.data));
+        if (!row || !row.data) return res.json(null);
+        let storedMenu = JSON.parse(row.data);
+        db.all("SELECT * FROM recipes", [], (errRx, rowsRx) => {
+            if (!errRx && rowsRx) {
+                storedMenu = hydrateMenuWithLiveRecipes(storedMenu, rowsRx);
+            }
+            res.json(storedMenu);
+        });
     });
 });
 
@@ -395,7 +432,9 @@ app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
         } else {
             if (s.shoppingList[category][item]) s.shoppingList[category][item].checked = !s.shoppingList[category][item].checked;
         }
-        saveState(res, s);
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(s)], () => {
+             res.json({ success: true });
+        });
     });
 });
 
@@ -441,9 +480,8 @@ app.post('/api/clear-shopping-extras', checkAuth, (req, res) => {
 });
 
 // --- UPDATES MENU ---
-
 app.post('/api/update-meal-servings', checkAuth, (req, res) => {
-    const { day, type, servings, extraId } = req.body; // extraId se è un pasto extra
+    const { day, type, servings, extraId } = req.body; 
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
         if (!row) return res.status(400).json({ error: "Err" });
         let s = JSON.parse(row.data);
@@ -462,29 +500,43 @@ app.post('/api/update-meal-servings', checkAuth, (req, res) => {
 
 app.post('/api/regenerate-meal', checkAuth, (req, res) => {
     const { day, type } = req.body;
-    // NOTA: Questa funzione ora rigenera l'intero slot seguendo la logica "algoritmo"
-    
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
         if (!row) return res.status(400).json({ error: "Err" });
         let s = JSON.parse(row.data);
         
-        // Recuperiamo tutte le ricette per fare la scelta
         db.all("SELECT * FROM recipes", [], (dberr, rows) => {
             const allRecipes = rows.map(r => ({...r, ingredients: JSON.parse(r.ingredients)}));
             
             if (type === 'lunch') {
-                // Logica PRANZO: Primo
-                const primi = allRecipes.filter(r => r.type === 'primo');
-                const newR = getWeightedRandom(primi, new Set()); // No history check per semplicità su regen singolo
-                if (newR) {
-                     // Mantieni servings custom se c'erano
-                     if(s.menu[day-1].lunch && s.menu[day-1].lunch.customServings) {
-                        newR.customServings = s.menu[day-1].lunch.customServings;
-                     }
-                     s.menu[day-1].lunch = newR;
+                const primiSemplici = allRecipes.filter(r => r.type === 'primo');
+                const primiCompleti = allRecipes.filter(r => r.type === 'primo_completo');
+                const sughi = allRecipes.filter(r => r.type === 'sugo');
+
+                const useComplete = (Math.random() > 0.6 && primiCompleti.length > 0) || (primiSemplici.length === 0);
+                let newMeal = null;
+
+                if (useComplete) {
+                    newMeal = getWeightedRandom(primiCompleti, new Set());
+                } else {
+                    const p = getWeightedRandom(primiSemplici, new Set());
+                    const sg = getWeightedRandom(sughi, new Set());
+                    if (p) {
+                         if (sg) {
+                            newMeal = { isComposite: true, name: `${p.name} al ${sg.name}`, items: [p, sg], difficulty: Math.max(p.difficulty, sg.difficulty)};
+                         } else {
+                            newMeal = p;
+                         }
+                    }
                 }
+                
+                if (newMeal) {
+                     if(s.menu[day-1].lunch && s.menu[day-1].lunch.customServings) {
+                        newMeal.customServings = s.menu[day-1].lunch.customServings;
+                     }
+                     s.menu[day-1].lunch = newMeal;
+                }
+
             } else if (type === 'dinner') {
-                // Logica CENA: Completo o Combo
                 const secondi = allRecipes.filter(r => r.type === 'secondo');
                 const contorni = allRecipes.filter(r => r.type === 'contorno');
                 const completi = allRecipes.filter(r => r.type === 'secondo_completo');
@@ -521,55 +573,92 @@ app.post('/api/regenerate-meal', checkAuth, (req, res) => {
     });
 });
 
+// Helper per creare oggetto pasto da 1 o 2 ricette
+const buildMealObject = (r1, r2 = null) => {
+    const parsedR1 = {...r1, ingredients: JSON.parse(r1.ingredients)};
+    if (!r2) return parsedR1;
+
+    const parsedR2 = {...r2, ingredients: JSON.parse(r2.ingredients)};
+    
+    // Ordine standard: Primo prima di Sugo, Secondo prima di Contorno
+    let items = [parsedR1, parsedR2];
+    if (parsedR1.type === 'sugo' || parsedR1.type === 'contorno') {
+        items = [parsedR2, parsedR1];
+    }
+
+    let name = `${items[0].name} + ${items[1].name}`;
+    if (items[0].type.includes('primo') && items[1].type === 'sugo') {
+        name = `${items[0].name} al ${items[1].name}`;
+    }
+
+    return {
+        isComposite: true,
+        name: name,
+        items: items,
+        difficulty: Math.max(r1.difficulty, r2.difficulty)
+    };
+};
+
 app.post('/api/set-manual-meal', checkAuth, (req, res) => {
-    const { day, type, recipeId, extraId } = req.body;
+    const { day, type, recipeId, pairedRecipeId, extraId } = req.body;
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
         if (!row) return res.status(400).json({ error: "Err" });
         let s = JSON.parse(row.data);
         
-        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, dbR) => {
-            if(!dbR) return res.status(400).json({error: "No Recipe"});
-            const newR = {...dbR, ingredients: JSON.parse(dbR.ingredients)};
+        const fetchIds = [recipeId];
+        if (pairedRecipeId) fetchIds.push(pairedRecipeId);
+
+        const placeholders = fetchIds.map(() => '?').join(',');
+        db.all(`SELECT * FROM recipes WHERE id IN (${placeholders})`, fetchIds, (err, dbRows) => {
+            if(!dbRows || dbRows.length === 0) return res.status(400).json({error: "No Recipe"});
             
+            // Trova le ricette corrispondenti
+            const r1 = dbRows.find(r => r.id == recipeId);
+            const r2 = pairedRecipeId ? dbRows.find(r => r.id == pairedRecipeId) : null;
+
+            if(!r1) return res.status(400).json({error: "Main recipe not found"});
+
+            const newMeal = buildMealObject(r1, r2);
+
             if (extraId) {
-                // Stiamo sostituendo un pasto extra
                 const idx = s.extraMeals.findIndex(e => e.uniqueId == extraId);
                 if (idx >= 0) {
-                    newR.uniqueId = extraId;
-                    newR.customServings = s.extraMeals[idx].customServings;
-                    s.extraMeals[idx] = newR;
+                    newMeal.uniqueId = extraId;
+                    newMeal.customServings = s.extraMeals[idx].customServings;
+                    s.extraMeals[idx] = newMeal;
                 }
             } else {
-                // Stiamo sostituendo un pasto calendario
                 const old = s.menu[day-1][type];
-                if(old && old.customServings) newR.customServings = old.customServings;
-                s.menu[day-1][type] = newR;
+                if(old && old.customServings) newMeal.customServings = old.customServings;
+                s.menu[day-1][type] = newMeal;
             }
             saveState(res, s);
         });
     });
 });
 
-// --- PASTI EXTRA (MANUAL ADD) ---
 app.post('/api/add-manual-meal', checkAuth, (req, res) => {
-    const { recipeId } = req.body; // Se vuoto crea placeholder? No, obbliga scelta.
-    // In realtà, la UI prima mostra la lista, poi chiama questo.
-    // Ma se volessimo aggiungere un "slot" vuoto e poi riempirlo?
-    // Facciamo che questa API riceve un recipeId e lo aggiunge agli extra.
-    
+    const { recipeId, pairedRecipeId } = req.body; 
     db.get("SELECT data FROM menu_state WHERE id = 1", (err, row) => {
         if (!row) return res.status(400).json({ error: "Err" });
         let s = JSON.parse(row.data);
         if (!s.extraMeals) s.extraMeals = [];
 
-        db.get("SELECT * FROM recipes WHERE id = ?", [recipeId], (err, dbR) => {
-            if(!dbR) return res.status(400).json({error: "Recipe not found"});
-            
-            const newR = {...dbR, ingredients: JSON.parse(dbR.ingredients)};
-            newR.uniqueId = Date.now(); // ID univoco per gestione UI
-            newR.customServings = s.people; // Default alle persone globali
+        const fetchIds = [recipeId];
+        if (pairedRecipeId) fetchIds.push(pairedRecipeId);
 
-            s.extraMeals.push(newR);
+        const placeholders = fetchIds.map(() => '?').join(',');
+        db.all(`SELECT * FROM recipes WHERE id IN (${placeholders})`, fetchIds, (err, dbRows) => {
+             if(!dbRows || dbRows.length === 0) return res.status(400).json({error: "No Recipe"});
+            
+            const r1 = dbRows.find(r => r.id == recipeId);
+            const r2 = pairedRecipeId ? dbRows.find(r => r.id == pairedRecipeId) : null;
+
+            const newMeal = buildMealObject(r1, r2);
+            newMeal.uniqueId = Date.now(); 
+            newMeal.customServings = s.people; 
+
+            s.extraMeals.push(newMeal);
             saveState(res, s);
         });
     });
