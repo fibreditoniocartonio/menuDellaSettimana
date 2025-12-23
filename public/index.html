@@ -74,8 +74,14 @@
 
         <!-- Tab Menu -->
         <div id="tab-menu" class="tab-content active">
-            <div id="dessert-card" class="card highlight hidden"></div>
             <div id="weekly-menu-list"></div>
+            <div id="dessert-card" class="card highlight hidden"></div>
+            <!-- Sezione Pasti Extra -->
+            <div id="extra-meals-container">
+                <h4 class="shopping-section-title">Piatti Aggiuntivi</h4>
+                <div id="extra-meals-list"></div>
+                <button class="btn-secondary full-width" onclick="openMealSelector(null, 'manual_add')" style="border-style:dashed;">+ Aggiungi Piatto a Scelta</button>
+            </div>
         </div>
 
         <!-- Tab Spesa -->
@@ -94,52 +100,62 @@
             
             <input type="hidden" id="rec-id">
             
-            <div style="margin-top:20px;">
-                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Nome Piatto</label>
-                <input type="text" id="rec-name" placeholder="Es. Carbonara">
-            </div>
+            <!-- Campi Ricetta (Iniziano Disabled) -->
+            <fieldset id="recipe-fieldset" disabled style="border:none; padding:0; margin:0;">
+                <div style="margin-top:20px;">
+                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Nome Piatto</label>
+                    <input type="text" id="rec-name" placeholder="Es. Carbonara">
+                </div>
 
-            <div class="row">
-                <div class="col">
-                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tipo</label>
-                    <select id="rec-type">
-                        <option value="primo">🍝 Primo</option>
-                        <option value="secondo">🥩 Secondo</option>
-                        <option value="dolce">🍰 Dolce</option>
+                <div class="row">
+                    <div class="col">
+                        <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tipo</label>
+                        <select id="rec-type">
+                            <option value="primo">🍝 Primo</option>
+                            <option value="secondo">🥩 Secondo</option>
+                            <option value="contorno">🥗 Contorno</option>
+                            <option value="secondo_completo">🥘 Secondo Completo</option>
+                            <option value="antipasto">🥟 Antipasto/Torta Salata</option>
+                            <option value="preparazione">🥣 Preparazione/Altro</option>
+                            <option value="dolce">🍰 Dolce</option>
+                        </select>
+                    </div>
+                    <div class="col">
+                        <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Persone</label>
+                        <input type="number" id="rec-servings" value="2">
+                    </div>
+                </div>
+
+                <div style="margin-top:5px;">
+                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Difficoltà</label>
+                    <select id="rec-difficulty">
+                        <option value="1">⭐ Facilissimo</option>
+                        <option value="2">⭐⭐ Facile</option>
+                        <option value="3">⭐⭐⭐ Medio</option>
+                        <option value="4">⭐⭐⭐⭐ Impegnativo</option>
+                        <option value="5">⭐⭐⭐⭐⭐ Chef</option>
                     </select>
                 </div>
-                <div class="col">
-                    <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Persone</label>
-                    <input type="number" id="rec-servings" value="2">
-                </div>
-            </div>
 
-            <!-- NUOVO CAMPO DIFFICOLTA -->
-            <div style="margin-top:5px;">
-                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Difficoltà (usata per la frequenza)</label>
-                <select id="rec-difficulty">
-                    <option value="1">⭐ Facilissimo</option>
-                    <option value="2">⭐⭐ Facile</option>
-                    <option value="3">⭐⭐⭐ Medio</option>
-                    <option value="4">⭐⭐⭐⭐ Impegnativo</option>
-                    <option value="5">⭐⭐⭐⭐⭐ Chef</option>
-                </select>
-            </div>
+                <label style="font-size:0.9rem; font-weight:bold; display:block; margin: 15px 0 5px;">Ingredienti</label>
+                <div id="ingredients-list"></div>
+                <button type="button" class="btn-small btn-secondary full-width" id="btn-add-ing" onclick="addIngredientRow()" style="margin-bottom:20px; border-style:dashed;">+ Aggiungi Ingrediente</button>
 
-            <!-- INGREDIENTI -->
-            <label style="font-size:0.9rem; font-weight:bold; display:block; margin: 15px 0 5px;">Ingredienti</label>
-            <div id="ingredients-list"></div>
-            <button class="btn-small btn-secondary full-width" onclick="addIngredientRow()" style="margin-bottom:20px; border-style:dashed;">+ Aggiungi Ingrediente</button>
-
-            <!-- NUOVO CAMPO PROCEDURA -->
-            <label style="font-size:0.9rem; font-weight:bold; display:block; margin-bottom:5px;">Procedimento</label>
-            <textarea id="rec-procedure" placeholder="Scrivi qui come si prepara..."></textarea>
+                <label style="font-size:0.9rem; font-weight:bold; display:block; margin-bottom:5px;">Procedimento</label>
+                <textarea id="rec-procedure" placeholder="Scrivi qui come si prepara..." oninput="autoResize(this)"></textarea>
+            </fieldset>
 
             <div class="modal-footer">
+                <!-- Bottone Delete (solo in edit mode) -->
                 <button class="btn-danger" id="btn-delete-rec" onclick="deleteCurrentRecipe()" style="display:none; margin-right:auto;">Elimina</button>
-                <button class="btn-primary" onclick="saveRecipe()">Salva Ricetta</button>
+                
+                <!-- Toggle Edit -->
+                <button class="btn-secondary" id="btn-edit-toggle" onclick="toggleEditMode()">✏️ Modifica</button>
+                
+                <!-- Save -->
+                <button class="btn-primary" id="btn-save-rec" onclick="saveRecipe()" style="display:none;">Salva</button>
             </div>
-            <div style="height:20px;"></div> <!-- Spacer per mobile -->
+            <div style="height:20px;"></div>
         </div>
     </div>
 
@@ -158,12 +174,10 @@
         </div>
     </div>
 
-<!-- MODAL OPZIONI -->
+    <!-- MODAL OPZIONI -->
     <div id="backup-modal" class="modal hidden">
         <div class="modal-content small text-center">
             <h3>Opzioni</h3>
-
-            <!-- SELETTORE TEMA -->
             <div style="text-align:left; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tema Grafico</label>
                 <select id="theme-selector" onchange="changeTheme(this.value)">
@@ -178,9 +192,7 @@
                     <option value="theme-christmas">🎄 Natale</option>
                 </select>
             </div>
-
             <hr style="border:0; border-top:1px dashed var(--border); margin: 20px 0;">
-
             <p style="font-size:0.9rem; color:var(--text-light)">Gestione Dati</p>
             <div class="col" style="display:flex; flex-direction:column; gap:10px;">
                 <button class="btn-primary full-width" onclick="exportJSON()">⬇️ Scarica Backup</button>
