@@ -16,18 +16,20 @@
     --bg-label-dinner: #fef3c7;
     --text-label-dinner: #d97706;
     --radius: 16px;           
-    --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05); 
+    --shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+    /* Valore di default per lo sfondo, sovrascritto da JS */ 
+    --bg-image: url('bg/winter.png'); 
 }
 
-/* THEMES */
-body.theme-winter { --bg-image: url('bg/winter.png'); }
-body.theme-christmas { --primary: #b91c1c; --primary-light: #ef4444; --primary-dark: #7f1d1d; --accent: #15803d; --bg: #fef2f2; --bg-image: url('bg/christmas.png'); --bg-label-lunch: #dcfce7; --text-label-lunch: #166534; --bg-label-dinner: #fee2e2; --text-label-dinner: #991b1b; }
-body.theme-valentine { --primary: #db2777; --primary-light: #f472b6; --primary-dark: #9d174d; --accent: #be123c; --bg: #fff1f2; --bg-image: url('bg/valentine.png'); }
-body.theme-spring { --primary: #10b981; --primary-light: #34d399; --primary-dark: #047857; --accent: #f59e0b; --bg: #f0fdf4; --bg-image: url('bg/spring.png'); }
-body.theme-easter { --primary: #8b5cf6; --primary-light: #a78bfa; --primary-dark: #7c3aed; --accent: #facc15; --bg: #fdf4ff; --bg-image: url('bg/easter.png'); --bg-label-lunch: #dcfce7; --text-label-lunch: #15803d; --bg-label-dinner: #fef9c3; --text-label-dinner: #854d0e; }
-body.theme-summer { --primary: #0ea5e9; --primary-light: #38bdf8; --primary-dark: #0369a1; --accent: #facc15; --bg: #f0f9ff; --bg-image: url('bg/summer.png'); }
-body.theme-autumn { --primary: #d97706; --primary-light: #fbbf24; --primary-dark: #92400e; --accent: #78350f; --bg: #fffbeb; --bg-image: url('bg/autumn.png'); }
-body.theme-halloween { --primary: #9333ea; --primary-light: #c084fc; --primary-dark: #581c87; --accent: #ea580c; --bg: #faf5ff; --bg-image: url('bg/halloween.png'); }
+/* THEMES - Immagini gestite da JS, qui solo colori */
+body.theme-winter {  }
+body.theme-christmas { --primary: #b91c1c; --primary-light: #ef4444; --primary-dark: #7f1d1d; --accent: #15803d; --bg: #fef2f2; --bg-label-lunch: #dcfce7; --text-label-lunch: #166534; --bg-label-dinner: #fee2e2; --text-label-dinner: #991b1b; }
+body.theme-valentine { --primary: #db2777; --primary-light: #f472b6; --primary-dark: #9d174d; --accent: #be123c; --bg: #fff1f2; }
+body.theme-spring { --primary: #10b981; --primary-light: #34d399; --primary-dark: #047857; --accent: #f59e0b; --bg: #f0fdf4; }
+body.theme-easter { --primary: #8b5cf6; --primary-light: #a78bfa; --primary-dark: #7c3aed; --accent: #facc15; --bg: #fdf4ff; --bg-label-lunch: #dcfce7; --text-label-lunch: #15803d; --bg-label-dinner: #fef9c3; --text-label-dinner: #854d0e; }
+body.theme-summer { --primary: #0ea5e9; --primary-light: #38bdf8; --primary-dark: #0369a1; --accent: #facc15; --bg: #f0f9ff; }
+body.theme-autumn { --primary: #d97706; --primary-light: #fbbf24; --primary-dark: #92400e; --accent: #78350f; --bg: #fffbeb; }
+body.theme-halloween { --primary: #9333ea; --primary-light: #c084fc; --primary-dark: #581c87; --accent: #ea580c; --bg: #faf5ff; }
 
 body { 
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 

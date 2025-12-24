@@ -25,27 +25,63 @@ function getEasterDate(year) {
     const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
     return { month: Math.floor((h + l - 7 * m + 114) / 31), day: ((h + l - 7 * m + 114) % 31) + 1 };
 }
-function applyTheme() {
-    const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
-    document.body.className = ''; 
-    if (savedTheme !== 'auto') { document.body.classList.add(savedTheme); return; }
-    const today = new Date();
-    const m = today.getMonth() + 1, d = today.getDate(), y = today.getFullYear();
-    const easter = getEasterDate(y);
-    const easterDate = new Date(y, easter.month - 1, easter.day);
-    const holySaturday = new Date(easterDate); holySaturday.setDate(easterDate.getDate() - 1);
-    const easterMonday = new Date(easterDate); easterMonday.setDate(easterDate.getDate() + 1);
-    const todayTime = new Date(y, m - 1, d).getTime();
 
-    if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) { document.body.classList.add('theme-easter'); return; }
-    if (m === 12 || (m === 1 && d <= 6)) document.body.classList.add('theme-christmas');
-    else if (m === 10 && d == 31) document.body.classList.add('theme-halloween');
-    else if (m === 2 && d == 14) document.body.classList.add('theme-valentine');
-    else if (m >= 3 && m <= 5) document.body.classList.add('theme-spring');
-    else if (m >= 6 && m <= 8) document.body.classList.add('theme-summer');
-    else if (m >= 9 && m <= 11) document.body.classList.add('theme-autumn');
-    else document.body.classList.add('theme-winter');
+async function applyTheme() {
+    let themeName = 'winter'; // Default
+    const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
+    
+    document.body.className = ''; 
+
+    if (savedTheme !== 'auto') {
+        themeName = savedTheme.replace('theme-', '');
+        document.body.classList.add(savedTheme);
+    } else {
+        const today = new Date();
+        const m = today.getMonth() + 1, d = today.getDate(), y = today.getFullYear();
+        const easter = getEasterDate(y);
+        const easterDate = new Date(y, easter.month - 1, easter.day);
+        const holySaturday = new Date(easterDate); holySaturday.setDate(easterDate.getDate() - 1);
+        const easterMonday = new Date(easterDate); easterMonday.setDate(easterDate.getDate() + 1);
+        const todayTime = new Date(y, m - 1, d).getTime();
+
+        if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) { 
+            themeName = 'easter';
+        } else if (m === 12 || (m === 1 && d <= 6)) {
+            themeName = 'christmas';
+        } else if (m === 10 && d == 31) {
+            themeName = 'halloween';
+        } else if (m === 2 && d == 14) {
+            themeName = 'valentine';
+        } else if (m >= 3 && m <= 5) {
+            themeName = 'spring';
+        } else if (m >= 6 && m <= 8) {
+            themeName = 'summer';
+        } else if (m >= 9 && m <= 11) {
+            themeName = 'autumn';
+        } else {
+            themeName = 'winter';
+        }
+        document.body.classList.add('theme-' + themeName);
+    }
+
+    // Caricamento casuale dello sfondo
+    try {
+        const res = await fetch('/api/backgrounds');
+        if (res.ok) {
+            const files = await res.json();
+            // Cerca file che iniziano con "nomeTema." (es. christmas.1.png) oppure sono esattamente "nomeTema.png"
+            const candidates = files.filter(f => f.startsWith(themeName + '.') || f === themeName + '.png');
+            
+            if (candidates.length > 0) {
+                const picked = candidates[Math.floor(Math.random() * candidates.length)];
+                document.body.style.setProperty('--bg-image', `url('bg/${picked}')`);
+            }
+        }
+    } catch (e) {
+        console.warn("Impossibile caricare sfondo dinamico", e);
+    }
 }
+
 function changeTheme(val) { localStorage.setItem('familyMenuTheme', val); applyTheme(); }
 
 // --- LEVENSHTEIN & FUZZY SEARCH ---
