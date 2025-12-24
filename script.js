@@ -218,8 +218,16 @@ async function login() {
 }
 function logout() { localStorage.removeItem('familyMenuToken'); authToken = null; location.reload(); }
 async function apiCall(endpoint, method = 'GET', body = null) {
-    const headers = { 'Authorization': authToken };
+    // MODIFICA QUI: Aggiungiamo l'header X-Auth-Token
+    const headers = { 
+        'Authorization': authToken, 
+        'X-Auth-Token': authToken 
+    };
+    
     if (body) headers['Content-Type'] = 'application/json';
+    
+    // NOTA: Se non usi .htaccess, ricorda che l'URL deve essere 'api.php/...'
+    // Il resto della funzione rimane uguale
     const res = await fetch(`${API_URL}${endpoint}`, {method, headers, body: body ? JSON.stringify(body) : null});
     if (res.status === 401) logout();
     return res; 

@@ -72,7 +72,15 @@ function sendError($msg, $code = 400) {
 
 function checkAuth() {
     $headers = getallheaders();
-    $auth = $headers['Authorization'] ?? $headers['authorization'] ?? '';
+    
+    // MODIFICA QUI: Cerchiamo il token in più posizioni
+    $auth = $headers['Authorization'] ?? 
+            $headers['authorization'] ?? 
+            $headers['X-Auth-Token'] ??      // Controllo header custom
+            $headers['x-auth-token'] ??      // Controllo minuscolo
+            '';
+
+    // Il controllo rimane lo stesso, perché il contenuto è sempre "Bearer CODE"
     if ($auth !== 'Bearer ' . SECRET_CODE) {
         sendError("Non autorizzato", 401);
     }
@@ -351,21 +359,29 @@ switch ($pathInfo) {
         break;
 
     // SFONDI
-    case (preg_match('#^/background/(.+)$#', $pathInfo, $matches) ? true : false):
-        // Nota: Endpoint pubblico, no checkAuth()
-        $theme = $matches[1];
+    case (preg_match('#^/background/(.+)$#', $pathInfo, $matches) ? $pathInfo : false):
+        $theme = trim($matches[1], "/ \t\n\r\0\x0B");
+        
         $bgDir = __DIR__ . '/bg';
         $filename = null;
+        
         if (is_dir($bgDir)) {
-            $files = scandir($bgDir);
-            $candidates = [];
-            foreach ($files as $f) {
-                if (preg_match("/^$theme\.(png|jpg|jpeg|webp)$/i", $f)) {
-                    $candidates[] = $f;
+            $files = @scandir($bgDir); 
+            if ($files !== false) {
+                $candidates = [];
+                $pattern = "/^" . preg_quote($theme, '/') . "\..+\.(png|jpg|jpeg|webp)$/i";
+                
+                foreach ($files as $f) {
+                    if ($f === '.' || $f === '..') continue;
+                    if (preg_match($pattern, $f)) {
+                        $candidates[] = $f;
+                    }
                 }
-            }
-            if (!empty($candidates)) {
-                $filename = $candidates[array_rand($candidates)];
+                
+                if (!empty($candidates)) {
+                    $randKey = array_rand($candidates);
+                    $filename = $candidates[$randKey];
+                }
             }
         }
         sendJson(['filename' => $filename]);
