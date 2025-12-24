@@ -250,18 +250,30 @@ function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople,
 }
 
 // --- ROTTE PUBLIC ---
-
-// NUOVA ROTTA: Elenco sfondi disponibili
-app.get('/api/backgrounds', (req, res) => {
+//Elenco sfondi disponibili
+app.get('/api/background/:theme', (req, res) => {
+    const theme = req.params.theme;
     const bgDir = path.join(__dirname, 'public', 'bg');
+    
     fs.readdir(bgDir, (err, files) => {
         if (err) {
             console.error("Errore lettura cartella bg:", err);
-            return res.json([]);
+            return res.json({ filename: null });
         }
-        // Filtra solo file immagine
-        const images = files.filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f));
-        res.json(images);
+        
+        // Filtra lato server: solo immagini del tema richiesto
+        const candidates = files.filter(f => 
+            (f.startsWith(theme + '.') || f === theme + '.png') && 
+            /\.(png|jpg|jpeg|webp)$/i.test(f)
+        );
+
+        if (candidates.length > 0) {
+            // Ne sceglie uno a caso qui, sul server
+            const picked = candidates[Math.floor(Math.random() * candidates.length)];
+            res.json({ filename: picked });
+        } else {
+            res.json({ filename: null });
+        }
     });
 });
 

@@ -66,15 +66,13 @@ async function applyTheme() {
 
     // Caricamento casuale dello sfondo
     try {
-        const res = await fetch('/api/backgrounds');
+        // Chiediamo al server UN SOLO file per questo tema
+        const res = await fetch(`/api/background/${themeName}`);
         if (res.ok) {
-            const files = await res.json();
-            // Cerca file che iniziano con "nomeTema." (es. christmas.1.png) oppure sono esattamente "nomeTema.png"
-            const candidates = files.filter(f => f.startsWith(themeName + '.') || f === themeName + '.png');
-            
-            if (candidates.length > 0) {
-                const picked = candidates[Math.floor(Math.random() * candidates.length)];
-                document.body.style.setProperty('--bg-image', `url('bg/${picked}')`);
+            const data = await res.json();
+            if (data.filename) {
+                // Il browser scarica solo l'immagine vincente
+                document.body.style.setProperty('--bg-image', `url('bg/${data.filename}')`);
             }
         }
     } catch (e) {
