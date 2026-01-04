@@ -1,17 +1,17 @@
 const API_URL = '/api';
 let authToken = localStorage.getItem('familyMenuToken');
 let recipesCache = [];
-let contextSelection = null; 
-let currentMenuData = null; 
-let isMenuLoaded = false; 
+let contextSelection = null;
+let currentMenuData = null;
+let isMenuLoaded = false;
 
 // STATO PER ABBINAMENTI MANUALI
-let pendingPairing = null; 
+let pendingPairing = null;
 // STATO PER CONFRONTO IMPORT
-let pendingCompareData = null; 
+let pendingCompareData = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    applyTheme(); 
+    applyTheme();
     if (authToken) {
         showView('view-dashboard');
         document.getElementById('navbar').classList.remove('hidden');
@@ -21,16 +21,91 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- THEMING & UTILS ---
+let currentUIMode = localStorage.getItem('familyMenuUIMode') || 'auto';
+
+// Inizializza il selettore UI al caricamento
+document.addEventListener('DOMContentLoaded', () => {
+    const uiSelect = document.getElementById('ui-mode-selector');
+    if(uiSelect) uiSelect.value = currentUIMode;
+    applyTheme(); // Applica tema e modalità UI
+        if (authToken) {
+        showView('view-dashboard');
+        document.getElementById('navbar').classList.remove('hidden');
+    } else {
+        showView('view-login');
+    }
+});
+
 function getEasterDate(year) {
     const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
     return { month: Math.floor((h + l - 7 * m + 114) / 31), day: ((h + l - 7 * m + 114) % 31) + 1 };
 }
 
+function changeUIMode(val) {
+    currentUIMode = val;
+    localStorage.setItem('familyMenuUIMode', val);
+        if (val !== 'auto') {
+        applyUIClass(val === 'dark');
+    } else {
+        const bgUrl = document.body.style.getPropertyValue('--bg-image');
+        if (bgUrl && bgUrl !== 'none') {
+            const cleanUrl = bgUrl.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
+            detectImageBrightness(cleanUrl);
+        } else {
+            applyUIClass(false);
+        }
+    }
+}
+
+function applyUIClass(isDark) {
+    if (isDark) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+}
+
+function detectImageBrightness(imageSrc) {
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.src = imageSrc;
+    img.style.display = "none";
+
+    img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 50;
+        canvas.height = 50;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 50, 50);
+
+        const imageData = ctx.getImageData(0, 0, 50, 50);
+        const data = imageData.data;
+        let r, g, b, avg;
+        let colorSum = 0;
+
+        for(let x = 0, len = data.length; x < len; x += 4) {
+            r = data[x];
+            g = data[x+1];
+            b = data[x+2];
+            avg = Math.floor((r + g + b) / 3);
+            colorSum += avg;
+        }
+
+        const brightness = Math.floor(colorSum / (50*50));
+        const shouldUseDark = brightness > 190;
+        applyUIClass(shouldUseDark);
+    };
+    img.onerror = function() {
+        applyUIClass(false);
+    }
+}
+
 async function applyTheme() {
     let themeName = 'winter'; // Default
     const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
-    
-    document.body.className = ''; 
+
+    const isDark = document.body.classList.contains('dark-mode');
+    document.body.className = isDark ? 'dark-mode' : '';
 
     if (savedTheme !== 'auto') {
         themeName = savedTheme.replace('theme-', '');
@@ -44,7 +119,7 @@ async function applyTheme() {
         const easterMonday = new Date(easterDate); easterMonday.setDate(easterDate.getDate() + 1);
         const todayTime = new Date(y, m - 1, d).getTime();
 
-        if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) { 
+        if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) {
             themeName = 'easter';
         } else if (m === 12 || (m === 1 && d <= 6)) {
             themeName = 'christmas';
@@ -64,15 +139,24 @@ async function applyTheme() {
         document.body.classList.add('theme-' + themeName);
     }
 
-    // Caricamento casuale dello sfondo
+    if (currentUIMode === 'dark') {
+        applyUIClass(true);
+    } else if (currentUIMode === 'light') {
+        applyUIClass(false);
+    }
+
     try {
-        // Chiediamo al server UN SOLO file per questo tema
         const res = await fetch(`/api/background/${themeName}`);
         if (res.ok) {
             const data = await res.json();
             if (data.filename) {
-                // Il browser scarica solo l'immagine vincente
-                document.body.style.setProperty('--bg-image', `url('bg/${data.filename}')`);
+                const url = `bg/${data.filename}`;
+                document.body.style.setProperty('--bg-image', `url('${url}')`);
+
+                // Se siamo in AUTO, analizziamo l'immagine appena scelta
+                if (currentUIMode === 'auto') {
+                    detectImageBrightness(url);
+                }
             }
         }
     } catch (e) {
@@ -80,7 +164,10 @@ async function applyTheme() {
     }
 }
 
-function changeTheme(val) { localStorage.setItem('familyMenuTheme', val); applyTheme(); }
+function changeTheme(val) {
+    localStorage.setItem('familyMenuTheme', val);
+    applyTheme();
+}
 
 // --- LEVENSHTEIN & FUZZY SEARCH ---
 function levenshteinDistance(a, b) {
@@ -111,14 +198,14 @@ function isFuzzyMatch(str1, str2) {
     const s1 = str1.trim().toLowerCase();
     const s2 = str2.trim().toLowerCase();
     if (s1 === s2) return true;
-    
+
     const maxLen = Math.max(s1.length, s2.length);
     if (maxLen === 0) return true;
-    
+
     const dist = levenshteinDistance(s1, s2);
     // Tolleranza: 20% della lunghezza o max 3 caratteri per parole corte
     const threshold = Math.max(2, Math.floor(maxLen * 0.2));
-    
+
     return dist <= threshold;
 }
 
@@ -128,7 +215,7 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         const container = document.getElementById('custom-dialog-container');
         let inputField = type === 'prompt' ? `<input type="text" id="dialog-input" value="${defaultValue}" class="full-width" style="margin-top:10px;">` : '';
         const cancelBtn = type !== 'alert' ? `<button class="btn-secondary" id="dialog-cancel">Annulla</button>` : '';
-        
+
         let customBtns = '';
         if (type === 'pairing') {
             customBtns = `<button class="btn-secondary" id="dialog-no">No, tieni singolo</button><button class="btn-primary" id="dialog-yes">Sì, scegli abbinamento</button>`;
@@ -153,11 +240,11 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         const wideClass = type === 'conflict' ? 'dialog-wide' : '';
 
         container.innerHTML = `<div class="custom-dialog-overlay" id="dialog-overlay"><div class="custom-dialog-box ${wideClass}"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
-        
+
         const ok = document.getElementById('dialog-ok');
         const cancel = document.getElementById('dialog-cancel');
         const input = document.getElementById('dialog-input');
-        
+
         const yes = document.getElementById('dialog-yes');
         const no = document.getElementById('dialog-no');
         const manual = document.getElementById('dialog-manual');
@@ -173,7 +260,7 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         if(no) no.onclick = () => close('no');
         if(manual) manual.onclick = () => close('manual');
         if(keepBoth) keepBoth.onclick = () => close('keep_both');
-        
+
         if(type === 'pairing' && yes) yes.onclick = () => close('pair');
         if(type === 'pairing' && no) no.onclick = () => close('single');
 
@@ -222,7 +309,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     if (body) headers['Content-Type'] = 'application/json';
     const res = await fetch(`${API_URL}${endpoint}`, {method, headers, body: body ? JSON.stringify(body) : null});
     if (res.status === 401) logout();
-    return res; 
+    return res;
 }
 
 // --- RICETTE ---
@@ -239,16 +326,16 @@ function renderRecipeList(list) {
     const container = document.getElementById('recipes-list');
     container.innerHTML = '';
     const groups = {
-        'primo': { title: '🍝 Primi Semplici (Pasta/Riso)', items: [] },
-        'primo_completo': { title: '🍝 Primi Completi (Lasagne/Forni)', items: [] },
+        'primo': { title: '🍚 Primi Semplici (da abbinare a Sughi e Salse)', items: [] },
         'sugo': { title: '🍅 Sughi e Salse', items: [] },
-        'secondo': { title: '🥩 Secondi Semplici', items: [] },
-        'contorno': { title: '🥗 Contorni', items: [] },
+        'primo_completo': { title: '🍝 Primi Completi', items: [] },
+        'secondo': { title: '🥩 Secondi Semplici (da abbinare ai Contorni)', items: [] },
+        'contorno': { title: '🍟 Contorni', items: [] },
         'secondo_completo': { title: '🥘 Secondi Completi', items: [] },
-        'antipasto': { title: '🥟 Antipasti & Torte Salate', items: [] },
+        'antipasto': { title: '🥟 Antipasti e Torte Salate', items: [] },
         'panificato': { title: '🥖 Pane e Pizze', items: [] },
-        'preparazione': { title: '🥣 Preparazioni & Altro', items: [] },
-        'dolce': { title: '🍰 Dolci', items: [] }
+        'dolce': { title: '🍰 Dolci', items: [] },
+        'preparazione': { title: '🥣 Preparazioni e Altro', items: [] }
     };
     list.forEach(r => {
         if(groups[r.type]) groups[r.type].items.push(r);
@@ -309,10 +396,10 @@ function openRecipeModal(recipe = null) {
         document.getElementById('rec-servings').value = 2;
         document.getElementById('rec-difficulty').value = 1;
         ta.value = "";
-        addIngredientRow(); 
-        toggleEditMode(); 
+        addIngredientRow();
+        toggleEditMode();
     }
-    
+
     setTimeout(() => {
         autoResize(ta);
     }, 50);
@@ -356,7 +443,7 @@ async function saveRecipe() {
     });
     if (id) await apiCall(`/recipes/${id}`, 'PUT', body);
     else await apiCall('/recipes', 'POST', body);
-    recipesCache = []; 
+    recipesCache = [];
     isMenuLoaded = false;
     closeRecipeModal(); loadRecipes();
 }
@@ -412,10 +499,10 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     let itemsToRender = (meal.items && Array.isArray(meal.items)) ? meal.items : [meal];
     const currentServings = meal.customServings || defaultPeople;
     const diffStars = "⭐".repeat(meal.difficulty || 1);
-    
+
     let labelStyle, labelText;
     if (isExtra) {
-        labelStyle = 'background:#f3e8ff; color:#7e22ce;'; 
+        labelStyle = 'background:#f3e8ff; color:#7e22ce;';
         labelText = 'Extra';
     } else {
         labelStyle = type === 'lunch' ? 'background:var(--bg-label-lunch); color:var(--text-label-lunch);' : 'background:var(--bg-label-dinner); color:var(--text-label-dinner);';
@@ -423,12 +510,12 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     }
 
     const namesHtml = itemsToRender.map(it => {
-        const typeEmoji = getEmojiForType(it.type); 
+        const typeEmoji = getEmojiForType(it.type);
         return `<div style="display:flex; align-items:center; margin-bottom:2px;"><span style="font-size:1rem; font-weight: 500;">${typeEmoji} ${it.name}</span></div>`;
     }).join('');
 
     const dayParam = isExtra ? 'null' : day;
-    const typeParam = isExtra ? `'manual_extra'` : `'${type}'`; 
+    const typeParam = isExtra ? `'manual_extra'` : `'${type}'`;
     const extraIdParam = isExtra ? uniqueId : 'null';
     const deleteBtn = isExtra ? `<button class="btn-icon" style="color:red;" onclick="removeManualMeal(${uniqueId})" title="Rimuovi">🗑</button>` : '';
 
@@ -465,7 +552,7 @@ function openRecipeDetails(day, type, extraId = null) {
         });
         htmlContent += '</ul>';
         const proc = (subItem.procedure || "Nessuna procedura.").replace(/\r?\n/g, '<br>');
-        htmlContent += `<p style="font-size:0.9rem; margin-top:5px;"><b>Procedimento:</b></p><div style="font-size:0.9rem; color:#555; background:#f9f9f9; padding:10px; border-radius:8px;">${proc}</div>`;
+        htmlContent += `<p style="font-size:0.9rem; margin-top:5px;"><b>Procedimento:</b></p><div style="font-size:0.9rem; padding:10px; border-radius:8px;">${proc}</div>`;
         if (idx < items.length - 1) htmlContent += '<hr>';
     });
     showCustomDialog(meal.name || "Dettagli Piatto", htmlContent, 'alert');
@@ -489,7 +576,7 @@ function renderMenuData(data) {
     if (data.extraMeals && data.extraMeals.length > 0) {
         data.extraMeals.forEach(m => {
             const wrap = document.createElement('div');
-            wrap.className = 'menu-day-card'; 
+            wrap.className = 'menu-day-card';
             wrap.innerHTML = renderMealControl(null, 'manual', m, data.people, true);
             extraDiv.appendChild(wrap);
         });
@@ -501,7 +588,7 @@ function renderMenuData(data) {
         const currentDessertPeople = data.dessertPeople || data.people;
         const diffStars = "⭐".repeat(data.dessert.difficulty || 1);
         desCard.innerHTML = `
-        <div class="menu-card-header"><h4 style="color:#d97706">🍰 Dolce della Settimana</h4></div>
+        <div class="menu-card-header"><h4>🍰 Dolce della Settimana</h4></div>
         <div class="meal-row-container"><div class="meal-top-row"><div class="meal-label-box" style="visibility:hidden; width:0; padding:0; min-width:0;"></div><div class="meal-info"><span style="font-weight: 500;">${data.dessert.name}</span><span style="font-size:0.7rem; color:#999;">${diffStars}</span></div></div><div class="meal-bottom-row"><div class="meal-controls"><button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button><input type="number" value="${currentDessertPeople}" class="small-qty-input" onchange="changeDessertPeople(this.value)" title="Persone"><button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli">🔍</button><button class="btn-icon" onclick="regenerateDessert()" title="Cambia">🔄</button></div></div></div>`;
     } else desCard.classList.add('hidden');
     renderShoppingList(data);
@@ -527,7 +614,7 @@ function renderShoppingList(data) {
             const i = listObj[k];
             const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
             const rowId = `${cat}-${safeKey}`;
-            
+
             let infoBtn = '';
             if (i.usages && i.usages.length > 0) {
                 infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
@@ -544,7 +631,7 @@ function renderShoppingList(data) {
 function showIngredientDetails(itemKey) {
     if (!currentMenuData || !currentMenuData.shoppingList.main[itemKey]) return;
     const item = currentMenuData.shoppingList.main[itemKey];
-    
+
     if (!item.usages || item.usages.length === 0) return;
 
     let html = `<ul style="padding-left:0; list-style:none;">`;
@@ -556,9 +643,9 @@ function showIngredientDetails(itemKey) {
         html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; flex-direction:column;">
                 <span style="font-weight:bold; color:var(--primary); font-size:0.9rem;">${u.recipe}</span>
-                <span style="font-size:0.75rem; color:#666;">${u.context}</span>
+                <span style="font-size:0.75rem;">${u.context}</span>
             </div>
-            <span style="font-weight:bold; background:#eee; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
+            <span style="font-weight:bold; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
         </li>`;
     });
     html += `</ul>`;
@@ -600,7 +687,7 @@ async function clearManualList() {
 }
 async function editShoppingQty(cat, item, current) {
     const n = await showPrompt(`Modifica quantità per ${item}:`, current);
-    if (n === false || n === null || n === current) return; 
+    if (n === false || n === null || n === current) return;
     const res = await apiCall('/update-shopping-qty', 'POST', { category: cat, item, newQty: n });
     if(res.ok) renderMenuData(await res.json());
 }
@@ -616,7 +703,7 @@ async function changeMealServings(day, type, val, extraId = null) {
 }
 async function regenerateDessert() {
     if(!(await showConfirm("Cambiare dolce?"))) return;
-    const res = await apiCall('/regenerate-dessert', 'POST', {}); 
+    const res = await apiCall('/regenerate-dessert', 'POST', {});
     if(res.ok) renderMenuData(await res.json());
 }
 async function changeDessertPeople(val) {
@@ -627,17 +714,17 @@ async function changeDessertPeople(val) {
 // --- MANUAL SELECTION ---
 async function openMealSelector(day, type, extraId = null) {
     contextSelection = { day, type, extraId };
-    pendingPairing = null; 
-    
+    pendingPairing = null;
+
     if (recipesCache.length === 0) {
         const res = await apiCall('/recipes');
         recipesCache = await res.json();
     }
-    
+
     const modal = document.getElementById('select-dessert-modal');
     document.querySelector('#select-dessert-modal .modal-header h3').innerText = (type === 'dessert') ? 'Scegli Dolce' : 'Scegli Piatto';
     document.getElementById('search-dessert').value = '';
-    
+
     let listToShow = [];
     if (type === 'dessert') {
         listToShow = recipesCache.filter(r => r.type === 'dolce');
@@ -646,7 +733,7 @@ async function openMealSelector(day, type, extraId = null) {
     } else {
         listToShow = recipesCache.filter(r => r.type !== 'dolce');
     }
-    
+
     renderManualSelectionList(listToShow);
     modal.classList.remove('hidden');
 }
@@ -694,14 +781,14 @@ function renderManualSelectionList(list) {
 
 function filterManualSelection() {
     const q = document.getElementById('search-dessert').value.toLowerCase();
-    
+
     if (pendingPairing) {
         let targetType = '';
         if (pendingPairing.type === 'primo') targetType = 'sugo';
         else if (pendingPairing.type === 'sugo') targetType = 'primo';
         else if (pendingPairing.type === 'secondo') targetType = 'contorno';
         else if (pendingPairing.type === 'contorno') targetType = 'secondo';
-        
+
         const filtered = recipesCache.filter(r => r.type === targetType && r.name.toLowerCase().includes(q));
         renderManualSelectionList(filtered);
         return;
@@ -726,7 +813,7 @@ async function selectManualRecipe(id) {
     if (pendingPairing) {
         document.getElementById('select-dessert-modal').classList.add('hidden');
         isMenuLoaded = false;
-        
+
         const payload = {
             recipeId: pendingPairing.id,
             pairedRecipeId: id
@@ -742,13 +829,13 @@ async function selectManualRecipe(id) {
              const res = await apiCall('/set-manual-meal', 'POST', payload);
              if(res.ok) renderMenuData(await res.json());
         }
-        
-        pendingPairing = null; 
+
+        pendingPairing = null;
         return;
     }
 
     const pairableTypes = ['primo', 'sugo', 'secondo', 'contorno'];
-    
+
     if (pairableTypes.includes(selected.type)) {
         let pairType = '';
         if (selected.type === 'primo') pairType = 'sugo';
@@ -757,15 +844,15 @@ async function selectManualRecipe(id) {
         else if (selected.type === 'contorno') pairType = 'secondo';
 
         const choice = await showPairingConfirm(selected.type, pairType);
-        
+
         if (choice === 'pair') {
             pendingPairing = selected;
             document.querySelector('#select-dessert-modal .modal-header h3').innerText = `Scegli ${pairType.charAt(0).toUpperCase() + pairType.slice(1)}`;
             document.getElementById('search-dessert').value = '';
-            
+
             const filtered = recipesCache.filter(r => r.type === pairType);
             renderManualSelectionList(filtered);
-            return; 
+            return;
         }
     }
 
@@ -779,11 +866,11 @@ async function selectManualRecipe(id) {
         const res = await apiCall('/add-manual-meal', 'POST', { recipeId: id });
         if(res.ok) renderMenuData(await res.json());
     } else {
-        const res = await apiCall('/set-manual-meal', 'POST', { 
-            day: contextSelection.day, 
-            type: contextSelection.type, 
+        const res = await apiCall('/set-manual-meal', 'POST', {
+            day: contextSelection.day,
+            type: contextSelection.type,
             recipeId: id,
-            extraId: contextSelection.extraId 
+            extraId: contextSelection.extraId
         });
         if(res.ok) renderMenuData(await res.json());
     }
@@ -823,7 +910,7 @@ async function exportJSON() {
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a); a.click(); a.remove(); 
+        document.body.appendChild(a); a.click(); a.remove();
         document.getElementById('backup-modal').classList.add('hidden');
     } else {
         await showAlert("Errore durante l'export.");
@@ -837,12 +924,12 @@ function formatRecipeFull(r) {
     const ings = r.ingredients.map(i => `<li><b>${i.name}</b>: ${i.quantity}</li>`).join('');
     return `
         <h2 style="margin-top:0; color:var(--primary);">${r.name}</h2>
-        <p style="color:#666;">Tipologia: ${r.type} | Difficoltà: ${r.difficulty}/5</p>
+        <p>Tipologia: ${r.type} | Difficoltà: ${r.difficulty}/5</p>
         <hr>
         <h4>Ingredienti</h4>
         <ul>${ings}</ul>
         <h4>Procedura</h4>
-        <div style="background:#f9f9f9; padding:15px; border-radius:12px; line-height:1.5;">${r.procedure.replace(/\n/g, '<br>')}</div>
+        <div style="padding:15px; border-radius:12px; line-height:1.5;">${r.procedure.replace(/\n/g, '<br>')}</div>
     `;
 }
 
@@ -878,8 +965,8 @@ function openManualPreview(r) {
     const html = formatRecipeFull(r);
     const overlay = document.createElement('div');
     overlay.className = 'custom-dialog-overlay';
-    overlay.style.zIndex = '3000'; 
-    
+    overlay.style.zIndex = '3000';
+
     overlay.innerHTML = `
         <div class="custom-dialog-box" style="text-align:left; max-width:500px; width:95%; max-height:80vh; overflow-y:auto;">
             ${html}
@@ -888,9 +975,9 @@ function openManualPreview(r) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(overlay);
-    
+
     document.getElementById('close-preview-btn').onclick = () => {
         document.body.removeChild(overlay);
     };
@@ -901,7 +988,7 @@ function showRecipeSelectionDialog(recipes, title, confirmLabel) {
     return new Promise((resolve) => {
         const container = document.getElementById('custom-dialog-container');
         const sorted = [...recipes].sort((a,b) => a.name.localeCompare(b.name));
-        
+
         let listHtml = `<div class="manual-import-list">`;
         sorted.forEach((r, idx) => {
             listHtml += `
@@ -934,7 +1021,7 @@ function showRecipeSelectionDialog(recipes, title, confirmLabel) {
         // Event listeners per preview
         sorted.forEach((r, idx) => {
             document.getElementById(`preview-${idx}`).onclick = (e) => {
-                e.stopPropagation(); 
+                e.stopPropagation();
                 openManualPreview(r);
             };
         });
@@ -976,7 +1063,7 @@ async function askConflictResolution(oldR, newR) {
 async function importJSON(el) {
     const file = el.files[0]; if (!file) return;
     const reader = new FileReader();
-    
+
     reader.onload = async (e) => {
         try {
             let importedRecipes = JSON.parse(e.target.result);
@@ -984,26 +1071,26 @@ async function importJSON(el) {
 
             const dbRes = await apiCall('/recipes');
             const dbRecipes = await dbRes.json();
-            
+
             const choice = await showCustomDialog(
-                "Modalità Importazione", 
-                `<p>Hai caricato <b>${importedRecipes.length}</b> ricette.<br>Come vuoi procedere?</p>`, 
+                "Modalità Importazione",
+                `<p>Hai caricato <b>${importedRecipes.length}</b> ricette.<br>Come vuoi procedere?</p>`,
                 'import_choice'
             );
 
-            if (choice === false) { 
-                el.value = ''; 
+            if (choice === false) {
+                el.value = '';
                 return;
             }
 
-            if (choice === 'no') { 
+            if (choice === 'no') {
                 if (await showConfirm("⚠️ ATTENZIONE: Questo cancellerà TUTTE le ricette esistenti. Sicuro?")) {
                     const res = await apiCall('/import-json', 'POST', { recipes: importedRecipes, clear: true });
                     const dat = await res.json();
                     await showAlert(`Importazione Completa!<br>Inserite: ${dat.count}`);
                     recipesCache = []; loadRecipes();
                 }
-                el.value = ''; 
+                el.value = '';
                 document.getElementById('backup-modal').classList.add('hidden');
                 return;
             }
@@ -1013,7 +1100,7 @@ async function importJSON(el) {
             if (choice === 'manual') {
                 const selected = await showManualImportSelector(importedRecipes);
                 if (!selected || selected.length === 0) {
-                    el.value = ''; return; 
+                    el.value = ''; return;
                 }
                 recipesToProcess = selected;
             }
@@ -1033,13 +1120,13 @@ async function importJSON(el) {
 
                 if (match) {
                     const decision = await askConflictResolution(match, newR);
-                    
-                    if (decision === 'yes') { 
+
+                    if (decision === 'yes') {
                          await apiCall(`/recipes/${match.id}`, 'PUT', newR);
                          updatedCount++;
-                    } else if (decision === 'keep_both') { 
+                    } else if (decision === 'keep_both') {
                         toInsert.push(newR);
-                    } else { 
+                    } else {
                         skippedCount++;
                     }
                 } else {
@@ -1057,9 +1144,9 @@ async function importJSON(el) {
             await showAlert(`Importazione Completa!<br>Nuove aggiunte: ${insertedCount}<br>Aggiornate: ${updatedCount}<br>Ignorate: ${skippedCount}`);
             recipesCache = []; loadRecipes();
 
-        } catch (err) { 
+        } catch (err) {
             console.error(err);
-            await showAlert("Errore durante la lettura del file o JSON non valido."); 
+            await showAlert("Errore durante la lettura del file o JSON non valido.");
         }
         el.value = ''; document.getElementById('backup-modal').classList.add('hidden');
     };

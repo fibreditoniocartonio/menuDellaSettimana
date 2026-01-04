@@ -66,7 +66,7 @@
     <!-- VISTA MENU & SPESA -->
     <div id="view-menu" class="view hidden padded">
         <button class="btn-secondary btn-small full-width" onclick="showView('view-dashboard')" style="margin-bottom:10px;">⬅ Torna alla Home</button>
-        
+
         <div class="tab-header">
             <button class="tab-btn active" onclick="switchTab('tab-menu')">Menu</button>
             <button class="tab-btn" onclick="switchTab('tab-shopping')">Lista Spesa</button>
@@ -97,9 +97,9 @@
                 <h3 id="modal-title">Ricetta</h3>
                 <span class="close-btn" onclick="closeRecipeModal()">&times;</span>
             </div>
-            
+
             <input type="hidden" id="rec-id">
-            
+
             <!-- Campi Ricetta (Iniziano Disabled) -->
             <fieldset id="recipe-fieldset" disabled style="border:none; padding:0; margin:0;">
                 <div style="margin-top:20px;">
@@ -172,14 +172,25 @@
         </div>
     </div>
 
-    <!-- MODAL OPZIONI -->
+
+<!-- MODAL OPZIONI -->
     <div id="backup-modal" class="modal hidden">
         <div class="modal-content small text-center">
             <h3>Opzioni</h3>
+
+            <div style="text-align:left; margin-bottom:15px;">
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Colori UI</label>
+                <select id="ui-mode-selector" onchange="changeUIMode(this.value)">
+                    <option value="auto">✨ Automatico (In base allo sfondo)</option>
+                    <option value="light">☀️ Chiaro</option>
+                    <option value="dark">🌙 Scuro</option>
+                </select>
+            </div>
+
             <div style="text-align:left; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tema Grafico</label>
                 <select id="theme-selector" onchange="changeTheme(this.value)">
-                    <option value="auto">✨ Automatico</option>
+                    <option value="auto">✨ Automatico (Calendario)</option>
                     <option value="theme-winter">❄️ Inverno</option>
                     <option value="theme-spring">🌸 Primavera</option>
                     <option value="theme-summer">🌊 Estate</option>
