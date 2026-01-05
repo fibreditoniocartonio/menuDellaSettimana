@@ -626,10 +626,10 @@ function showIngredientDetails(itemKey) {
         }
         html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
         <div style="display:flex; flex-direction:column;">
-        <span style="font-weight:bold; color:var(--primary); font-size:0.9rem;">${u.recipe}</span>
-        <span style="font-size:0.75rem; color:#666;">${u.context}</span>
+        <span style="font-weight:bold; color:var(--text); font-size:0.9rem;">${u.recipe}</span>
+        <span style="font-size:0.75rem; color:var(--text-light);">${u.context}</span>
         </div>
-        <span style="font-weight:bold; background:#eee; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
+        <span style="font-weight:bold; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
         </li>`;
     });
     html += `</ul>`;
