@@ -1,10 +1,11 @@
+/* RESET GLOBALE FONDAMENTALE PER MOBILE */
 *, *::before, *::after { box-sizing: border-box; }
 
 :root {
     --primary: #4f46e5;
     --primary-light: #818cf8;
     --primary-dark: #3730a3;
-    --accent: #f43f5e;
+    --accent: #00bcc9;
     --bg: #f8fafc;
     --surface: #ffffff;
     --text: #334155;
@@ -27,6 +28,53 @@ body.theme-summer { --primary: #0ea5e9; --primary-light: #38bdf8; --primary-dark
 body.theme-autumn { --primary: #d97706; --primary-light: #fbbf24; --primary-dark: #92400e; --accent: #78350f; --bg: #fffbeb; }
 body.theme-halloween { --primary: #9333ea; --primary-light: #c084fc; --primary-dark: #581c87; --accent: #ea580c; --bg: #faf5ff; }
 
+/* UI MODES */
+body.ui-colorful {
+    --surface: var(--primary);
+    --text: #ffffff;
+    --text-light: rgba(255, 255, 255, 0.8);
+    --border: rgba(255, 255, 255, 0.3);
+
+    /* Etichette Pranzo/Cena su sfondo colorato: devono essere bianche semitrasparenti */
+    --bg-label-lunch: rgba(255, 255, 255, 0.2);
+    --text-label-lunch: #ffffff;
+    --bg-label-dinner: rgba(0, 0, 0, 0.15);
+    --text-label-dinner: #ffffff;
+}
+
+body.ui-colorful .recipe-group-header,
+body.ui-colorful .menu-card-header h4,
+body.ui-colorful .card-action .icon,
+body.ui-colorful #nav-title,
+body.ui-colorful .btn-info {
+    color: #ffffff !important;
+}
+
+body.ui-colorful .btn-primary { color: var(--text); border-color: var(--text); }
+body.ui-colorful .btn-secondary {
+    background: var(--accent);
+    border-color: rgba(255,255,255,0.5);
+    color: #ffffff;
+}
+
+body.ui-colorful select,
+body.ui-colorful textarea {
+    background: rgba(255,255,255,0.9);
+    color: #333333;
+    border-color: transparent;
+}
+
+body.ui-colorful .small-qty-input {
+    background: #ffffff !important;
+    color: var(--primary) !important;
+}
+
+/* Navigazione */
+body.ui-colorful nav {
+    background: var(--surface);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
 body {
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
     background-color: var(--bg); background-image: var(--bg-image);
@@ -35,119 +83,7 @@ body {
     display: flex; flex-direction: column; transition: background-color 0.5s ease;
 }
 
-/* --- DARK MODE & THEMATIC OVERRIDES --- */
-body.dark-mode {
-    --text: #ffffff;
-    --text-light: #e2e8f0;
-}
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea {
-    background: var(--surface);
-    color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-}
-body.dark-mode input::placeholder,
-body.dark-mode textarea::placeholder {
-    color: rgba(255, 255, 255, 0.6);
-}
-body.dark-mode input:focus,
-body.dark-mode select:focus,
-body.dark-mode textarea:focus {
-    border-color: #fff;
-}
-body.dark-mode .card-action:active { transform: scale(0.98); background: rgba(0,0,0,0.1); }
-body.dark-mode .checklist li { background: var(--surface); border-color: rgba(255,255,255,0.1); }
-body.dark-mode .recipe-card,
-body.dark-mode .menu-day-card,
-body.dark-mode .login-card,
-body.dark-mode .modal-content,
-body.dark-mode nav {
-    background: var(--surface);
-}
-/* Bottoni e icone */
-body.dark-mode .btn-secondary { background:  var(--surface); color: white; border: 1px solid rgba(255,255,255,0.4); }
-body.dark-mode .btn-icon { background: rgba(0,0,0,0.15); color: white; }
-body.dark-mode .btn-icon:hover { background: white; color: var(--primary); }
-body.dark-mode .tab-header { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.2); }
-body.dark-mode .tab-btn { color: rgba(255,255,255,0.7); }
-body.dark-mode .tab-btn.active { color: white; border: 1px solid rgba(255,255,255,0.3); }
-body.dark-mode .qty-area { background: rgba(0,0,0,0.25); color: white; }
-body.dark-mode hr { border-color: rgba(255,255,255); }
-body.dark-mode h1, body.dark-mode h2, body.dark-mode h3, body.dark-mode h4 { color: white;}
-body.dark-mode .custom-dialog-box { background: var(--surface);}
-/* Fallback generico se nessun tema è selezionato */
-body.dark-mode {
-    --bg: #334155;
-    --surface: #475569;
-    --border: #64748b;
-    --primary: #94a3b8;
-}
-/* Winter: Blu Reale Elettrico */
-body.theme-winter.dark-mode {
-    --bg: #1e3a8a;       /* Blue 900 - Blu profondo */
-    --surface: #2563eb;  /* Blue 600 - Blu acceso brillante */
-    --border: #60a5fa;
-    --primary: #93c5fd;  /* Celeste chiaro per i dettagli */
-    --primary-light: #bfdbfe;
-}
-/* Christmas: Rosso Natale Intenso */
-body.theme-christmas.dark-mode {
-    --bg: #991b1b;       /* Red 800 - Rosso Scuro */
-    --surface: #dc2626;  /* Red 600 - Rosso Ferrari */
-    --border: #f87171;
-    --primary: #fecaca;  /* Rosa/Rosso pallido */
-    --primary-light: #fee2e2;
-}
-/* Valentine: Fucsia e Rosa Shocking */
-body.theme-valentine.dark-mode {
-    --bg: #be185d;       /* Pink 700 - Magenta Scuro */
-    --surface: #db2777;  /* Pink 600 - Rosa Acceso */
-    --border: #f472b6;
-    --primary: #fbcfe8;
-    --primary-light: #fce7f3;
-}
-/* Spring: Verde Prato Lussureggiante */
-body.theme-spring.dark-mode {
-    --bg: #166534;       /* Green 800 - Verde Bosco */
-    --surface: #15803d;  /* Green 700 - Verde Prato */
-    --border: #4ade80;
-    --primary: #bbf7d0;
-    --primary-light: #dcfce7;
-}
-/* Easter: Viola Ametista */
-body.theme-easter.dark-mode {
-    --bg: #6b21a8;       /* Purple 800 */
-    --surface: #7e22ce;  /* Purple 700 - Viola Vibrante */
-    --border: #a855f7;
-    --primary: #e9d5ff;
-    --primary-light: #f3e8ff;
-}
-/* Summer: Turchese Oceanico */
-body.theme-summer.dark-mode {
-    --bg: #0e7490;       /* Cyan 800 - Ottanio */
-    --surface: #0891b2;  /* Cyan 600 - Turchese Acceso */
-    --border: #22d3ee;
-    --primary: #cffafe;
-    --primary-light: #ecfeff;
-}
-/* Autumn: Arancione Bruciato e Zucca */
-body.theme-autumn.dark-mode {
-    --bg: #9a3412;       /* Orange 800 - Ruggine */
-    --surface: #c2410c;  /* Orange 700 - Arancio Vivo */
-    --border: #fb923c;
-    --primary: #ffedd5;
-    --primary-light: #fff7ed;
-}
-/* Halloween: Viola Notte e Arancio Neon */
-body.theme-halloween.dark-mode {
-    --bg: #4c1d95;       /* Violet 900 */
-    --surface: #6d28d9;  /* Violet 700 */
-    --border: #8b5cf6;
-    --primary: #fb923c;  /* Arancio Neon come accent */
-    --accent: #fb923c;
-    --primary-light: #ddd6fe;
-}
+hr { color: var(--text); }
 
 .view { display: none; flex: 1; overflow-y: auto; width: 100%; max-width: 600px; margin: 0 auto; position: relative; padding-bottom: 80px; }
 .view.active { display: block; }
@@ -175,8 +111,8 @@ nav { background: var(--surface); padding: 15px 25px; display: flex; justify-con
 .ingredient-row .btn-remove-ing { flex-shrink: 0; width: 32px; height: 32px; background: #fee2e2; color: #ef4444; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; padding: 0; }
 
 .tab-header { display: flex; margin: 10px 0 20px; background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.4); border-radius: 50px; padding: 5px; }
-.tab-btn { flex: 1; background: transparent; border: none; padding: 10px; border-radius: 40px; font-weight: 600; color: var(--text-light); transition: 0.3s; }
-.tab-btn.active { background: var(--surface); color: var(--primary); }
+.tab-btn { flex: 1; background: transparent; border: none; padding: 10px; border-radius: 40px; font-weight: 600; color: var(--accent); transition: 0.3s; }
+.tab-btn.active { background: var(--surface); color: var(--text); }
 .tab-content { display: none; } .tab-content.active { display: block; }
 
 .menu-day-card { background: var(--surface); padding: 20px; border-radius: var(--radius); margin-bottom: 15px; position: relative; overflow: hidden; }
@@ -200,6 +136,9 @@ nav { background: var(--surface); padding: 15px 25px; display: flex; justify-con
 .checklist li:last-child { border-bottom: none; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
 .checklist li.checked span { text-decoration: line-through; color: var(--text-light); opacity: 0.6; }
 .checklist li.checked .check-icon { color:var(--primary); text-decoration: none; opacity: 1; }
+/* Override per UI Colorful: icona bianca */
+body.ui-colorful .checklist li.checked .check-icon { color: white; }
+
 .modified-qty { color: var(--accent); font-weight: bold; }
 .check-area { flex: 1; cursor: pointer; display: flex; align-items: center; gap: 10px; }
 .qty-area {
@@ -246,16 +185,18 @@ fieldset:disabled input, fieldset:disabled select, fieldset:disabled textarea {
     color: var(--text);
     resize: none;
     -webkit-appearance: none;
-    pointer-events: none; /* Rimuove interazione sui select */
+    pointer-events: none;
 }
 fieldset:disabled label { color: var(--primary) !important; font-weight: bold; }
+body.ui-colorful fieldset:disabled label { color: white !important; opacity: 0.9; }
+
 fieldset:disabled .btn-remove-ing, fieldset:disabled #btn-add-ing { display: none; }
 fieldset:disabled .ingredient-row { margin-bottom: 0; border-bottom: 1px dashed #eee; padding-bottom: 5px; }
 
 
 button { cursor: pointer; font-size: 0.95rem; border: none; border-radius: 12px; transition: 0.2s; font-weight: 600; font-family: inherit; }
 button:active { transform: scale(0.96); }
-.btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; padding: 14px 20px; }
+.btn-primary { background: var(--primary); color: white; padding: 14px 20px; border: 1px solid var(--border); }
 .btn-secondary { background: white; color: var(--text); padding: 10px 15px; border: 1px solid var(--border); }
 .btn-success { background: linear-gradient(135deg, #10b981, #059669); color: white; padding: 10px 15px; }
 .btn-danger { background: #ef4444; color: white; padding: 10px 15px; }
@@ -265,24 +206,27 @@ button:active { transform: scale(0.96); }
 .btn-icon { background: var(--bg); width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--text); border: 1px solid transparent; }
 .btn-icon:hover { background: white; border-color: var(--border); color: var(--primary); }
 .btn-icon.small { width: 30px; height: 30px; font-size: 0.9rem; }
+body.ui-colorful .btn-icon { background: rgba(255,255,255,0.2); color: white; }
+body.ui-colorful .btn-icon:hover { background: white; color: var(--primary); }
+
 .btn-refresh {
     background: transparent;
     color: var(--primary);
     padding: 3px;
     font-size: x-large;
 }
+body.ui-colorful .btn-refresh { color: white; }
 
-.custom-dialog-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%;  z-index: 2100; display: flex; align-items: center; justify-content: center; }
-.custom-dialog-box { background: white; padding: 30px; border-radius: 24px; width: 85%; max-width: 350px; text-align: center; border: 1px solid var(--primary); }
-.custom-dialog-box h3 { margin-top: 0; color: var(--primary); }
+.custom-dialog-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.8);  z-index: 2100; display: flex; align-items: center; justify-content: center; }
+.custom-dialog-box { background: var(--surface); padding: 30px; border-radius: 24px; width: 85%; max-width: 350px; text-align: center; border: 1px solid white; }
+.custom-dialog-box h3 { margin-top: 0; color: var(--secondary); }
 .dialog-buttons { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
-.login-card { text-align: center; margin-top: 25vh; padding: 40px 30px; background: var(--surface); border-radius: 24px;}
+.login-card { text-align: center; margin-top: 25vh; padding: 40px 30px; background: var(--surface); border-radius: 24px; width: 100%; }
 .login-card h1 { font-size: 2.5rem; margin-bottom: 5px; color: var(--primary); }
 
 /* STILE PER LA SCHEDA FULL-SCREEN DI CONFRONTO */
 .full-compare-modal {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: var(--bg);
     z-index: 3000;
     overflow-y: auto;
     display: flex; flex-direction: column;
@@ -292,11 +236,11 @@ button:active { transform: scale(0.96); }
     display: flex; justify-content: space-between; align-items: center;
     position: sticky; top: 0; z-index: 10;
 }
-.full-compare-header h3 { margin: 0; color: var(--primary); }
+.full-compare-header h3 { margin: 0; color: var(--text); }
 
 .compare-split {
     display: flex; flex-direction: column;
-    padding: 20px; gap: 20px;
+    padding: 20px;
     max-width: 1200px; margin: 0 auto; width: 100%;
 }
 @media(min-width: 768px) { .compare-split { flex-direction: row; } }
@@ -306,16 +250,17 @@ button:active { transform: scale(0.96); }
     background: var(--surface);
     padding: 25px;
     border-radius: 16px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--text);
     position: relative;
+    color: var(--text);
 }
-.old-side { border-top: 4px solid #64748b; }
+.old-side { border-top: 4px solid var(--accent); }
 .new-side { border-top: 4px solid var(--primary); }
 .side-tag {
     position: absolute; top: 10px; right: 10px;
     font-size: 0.7rem; font-weight: bold;
     padding: 4px 8px; border-radius: 4px;
-    background: #f1f5f9; color: #64748b;
+    background: var(--surface); color: var(--text);
 }
 
 /* LISTA MANUALE IMPORT */

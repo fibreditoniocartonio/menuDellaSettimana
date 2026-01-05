@@ -11,6 +11,16 @@ let pendingPairing = null;
 let pendingCompareData = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Inizializza select UI
+    const savedUi = localStorage.getItem('familyMenuUiMode') || 'auto';
+    const uiSel = document.getElementById('ui-mode-selector');
+    if(uiSel) uiSel.value = savedUi;
+
+    // Inizializza select Tema
+    const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
+    const themeSel = document.getElementById('theme-selector');
+    if(themeSel) themeSel.value = savedTheme;
+
     applyTheme();
     if (authToken) {
         showView('view-dashboard');
@@ -21,152 +31,128 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- THEMING & UTILS ---
-let currentUIMode = localStorage.getItem('familyMenuUIMode') || 'auto';
-
-// Inizializza il selettore UI al caricamento
-document.addEventListener('DOMContentLoaded', () => {
-    const uiSelect = document.getElementById('ui-mode-selector');
-    if(uiSelect) uiSelect.value = currentUIMode;
-    applyTheme(); // Applica tema e modalità UI
-        if (authToken) {
-        showView('view-dashboard');
-        document.getElementById('navbar').classList.remove('hidden');
-    } else {
-        showView('view-login');
-    }
-});
-
 function getEasterDate(year) {
     const a = year % 19, b = Math.floor(year / 100), c = year % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
     return { month: Math.floor((h + l - 7 * m + 114) / 31), day: ((h + l - 7 * m + 114) % 31) + 1 };
-}
-
-function changeUIMode(val) {
-    currentUIMode = val;
-    localStorage.setItem('familyMenuUIMode', val);
-        if (val !== 'auto') {
-        applyUIClass(val === 'dark');
-    } else {
-        const bgUrl = document.body.style.getPropertyValue('--bg-image');
-        if (bgUrl && bgUrl !== 'none') {
-            const cleanUrl = bgUrl.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, '');
-            detectImageBrightness(cleanUrl);
-        } else {
-            applyUIClass(false);
-        }
-    }
-}
-
-function applyUIClass(isDark) {
-    if (isDark) {
-        document.body.classList.add('dark-mode');
-    } else {
-        document.body.classList.remove('dark-mode');
-    }
-}
-
-function detectImageBrightness(imageSrc) {
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = imageSrc;
-    img.style.display = "none";
-
-    img.onload = function() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 50;
-        canvas.height = 50;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 50, 50);
-
-        const imageData = ctx.getImageData(0, 0, 50, 50);
-        const data = imageData.data;
-        let r, g, b, avg;
-        let colorSum = 0;
-
-        for(let x = 0, len = data.length; x < len; x += 4) {
-            r = data[x];
-            g = data[x+1];
-            b = data[x+2];
-            avg = Math.floor((r + g + b) / 3);
-            colorSum += avg;
-        }
-
-        const brightness = Math.floor(colorSum / (50*50));
-        const shouldUseDark = brightness > 190;
-        applyUIClass(shouldUseDark);
-    };
-    img.onerror = function() {
-        applyUIClass(false);
-    }
 }
 
 async function applyTheme() {
     let themeName = 'winter'; // Default
     const savedTheme = localStorage.getItem('familyMenuTheme') || 'auto';
 
-    const isDark = document.body.classList.contains('dark-mode');
-    document.body.className = isDark ? 'dark-mode' : '';
+    // Rimuove classi tema esistenti
+    document.body.classList.forEach(cls => {
+        if(cls.startsWith('theme-')) document.body.classList.remove(cls);
+    });
 
-    if (savedTheme !== 'auto') {
-        themeName = savedTheme.replace('theme-', '');
-        document.body.classList.add(savedTheme);
-    } else {
-        const today = new Date();
-        const m = today.getMonth() + 1, d = today.getDate(), y = today.getFullYear();
-        const easter = getEasterDate(y);
-        const easterDate = new Date(y, easter.month - 1, easter.day);
-        const holySaturday = new Date(easterDate); holySaturday.setDate(easterDate.getDate() - 1);
-        const easterMonday = new Date(easterDate); easterMonday.setDate(easterDate.getDate() + 1);
-        const todayTime = new Date(y, m - 1, d).getTime();
-
-        if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) {
-            themeName = 'easter';
-        } else if (m === 12 || (m === 1 && d <= 6)) {
-            themeName = 'christmas';
-        } else if (m === 10 && d == 31) {
-            themeName = 'halloween';
-        } else if (m === 2 && d == 14) {
-            themeName = 'valentine';
-        } else if (m >= 3 && m <= 5) {
-            themeName = 'spring';
-        } else if (m >= 6 && m <= 8) {
-            themeName = 'summer';
-        } else if (m >= 9 && m <= 11) {
-            themeName = 'autumn';
+        if (savedTheme !== 'auto') {
+            themeName = savedTheme.replace('theme-', '');
+            document.body.classList.add(savedTheme);
         } else {
-            themeName = 'winter';
+            const today = new Date();
+            const m = today.getMonth() + 1, d = today.getDate(), y = today.getFullYear();
+            const easter = getEasterDate(y);
+            const easterDate = new Date(y, easter.month - 1, easter.day);
+            const holySaturday = new Date(easterDate); holySaturday.setDate(easterDate.getDate() - 1);
+            const easterMonday = new Date(easterDate); easterMonday.setDate(easterDate.getDate() + 1);
+            const todayTime = new Date(y, m - 1, d).getTime();
+
+            if (todayTime >= holySaturday.getTime() && todayTime <= easterMonday.getTime()) {
+                themeName = 'easter';
+            } else if (m === 12 || (m === 1 && d <= 6)) {
+                themeName = 'christmas';
+            } else if (m === 10 && d == 31) {
+                themeName = 'halloween';
+            } else if (m === 2 && d == 14) {
+                themeName = 'valentine';
+            } else if (m >= 3 && m <= 5) {
+                themeName = 'spring';
+            } else if (m >= 6 && m <= 8) {
+                themeName = 'summer';
+            } else if (m >= 9 && m <= 11) {
+                themeName = 'autumn';
+            } else {
+                themeName = 'winter';
+            }
+            document.body.classList.add('theme-' + themeName);
         }
-        document.body.classList.add('theme-' + themeName);
-    }
 
-    if (currentUIMode === 'dark') {
-        applyUIClass(true);
-    } else if (currentUIMode === 'light') {
-        applyUIClass(false);
-    }
-
-    try {
-        const res = await fetch(`/api/background/${themeName}`);
-        if (res.ok) {
-            const data = await res.json();
-            if (data.filename) {
-                const url = `bg/${data.filename}`;
-                document.body.style.setProperty('--bg-image', `url('${url}')`);
-
-                // Se siamo in AUTO, analizziamo l'immagine appena scelta
-                if (currentUIMode === 'auto') {
-                    detectImageBrightness(url);
+        // Caricamento casuale dello sfondo
+        urlBgImage = "";
+        try {
+            const res = await fetch(`/api/background/${themeName}`);
+            if (res.ok) {
+                const data = await res.json();
+                urlBgImage = `bg/${data.filename}`;
+                if (data.filename) {
+                    document.body.style.setProperty('--bg-image', `url('bg/${data.filename}')`);
+                } else {
+                    document.body.style.removeProperty('--bg-image');
                 }
             }
+        } catch (e) {
+            console.warn("Impossibile caricare sfondo dinamico", e);
         }
-    } catch (e) {
-        console.warn("Impossibile caricare sfondo dinamico", e);
-    }
+        //applico i coloriUI
+        await applyUiMode(themeName, urlBgImage);
 }
 
 function changeTheme(val) {
     localStorage.setItem('familyMenuTheme', val);
     applyTheme();
+}
+
+function changeUiMode(val) {
+    localStorage.setItem('familyMenuUiMode', val);
+    applyTheme();
+}
+
+async function applyUiMode(currentThemeName, urlBgImage) {
+    const mode = localStorage.getItem('familyMenuUiMode') || 'auto';
+    const body = document.body;
+    const brightness = await detectImageBrightness(urlBgImage);
+
+    body.classList.remove('ui-colorful');
+    if (mode === 'colorful' || (mode === 'auto' && brightness>190) ) {
+        body.classList.add('ui-colorful');
+    }
+}
+
+async function detectImageBrightness(imageSrc) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.src = imageSrc;
+        img.style.display = "none";
+
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 50;
+            canvas.height = 50;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, 50, 50);
+
+            const imageData = ctx.getImageData(0, 0, 50, 50);
+            const data = imageData.data;
+            let r, g, b, avg;
+            let colorSum = 0;
+
+            for(let x = 0, len = data.length; x < len; x += 4) {
+                r = data[x];
+                g = data[x+1];
+                b = data[x+2];
+                avg = Math.floor((r + g + b) / 3);
+                colorSum += avg;
+            }
+
+            const brightness = Math.floor(colorSum / (50*50));
+            resolve(brightness);
+        };
+
+        img.onerror = function() {
+            resolve(255);
+        }
+    });
 }
 
 // --- LEVENSHTEIN & FUZZY SEARCH ---
@@ -220,23 +206,21 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         if (type === 'pairing') {
             customBtns = `<button class="btn-secondary" id="dialog-no">No, tieni singolo</button><button class="btn-primary" id="dialog-yes">Sì, scegli abbinamento</button>`;
         } else if (type === 'conflict') {
-             // MODIFICA: Bottoni sulla stessa riga
-             customBtns = `
-             <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
-                <button class="btn-secondary full-width" id="dialog-compare" style="border:1px dashed var(--primary); color:var(--primary);">🔍 Confronta dettagli</button>
-                <div class="conflict-buttons-row">
-                     <button class="btn-secondary" id="dialog-no">Tieni Vecchia</button>
-                     <button class="btn-primary" id="dialog-keep-both">Tieni Entrambe</button>
-                     <button class="btn-danger" id="dialog-yes">Sostituisci</button>
-                </div>
-             </div>`;
+            customBtns = `
+            <div style="display:flex; flex-direction:column; gap:10px; width:100%;">
+            <button class="btn-secondary full-width" id="dialog-compare" style="color:var(--text);">🔍 Confronta dettagli</button>
+            <div class="conflict-buttons-row">
+            <button class="btn-secondary" id="dialog-no">Tieni Vecchia</button>
+            <button class="btn-primary" id="dialog-keep-both">Tieni Entrambe</button>
+            <button class="btn-danger" id="dialog-yes">Sostituisci</button>
+            </div>
+            </div>`;
         } else if (type === 'import_choice') {
-             customBtns = `<div style="display:flex; flex-direction:column; gap:10px; width:100%"><button class="btn-primary full-width" id="dialog-yes">Aggiungi (Unisci)</button><button class="btn-secondary full-width" id="dialog-manual">Scegli manualmente cosa aggiungere</button><button class="btn-danger full-width" id="dialog-no">Sostituisci Tutto (Cancella DB)</button><button class="btn-text full-width" id="dialog-cancel">Annulla</button></div>`;
+            customBtns = `<div style="display:flex; flex-direction:column; gap:10px; width:100%"><button class="btn-primary full-width" id="dialog-yes">Aggiungi (Unisci)</button><button class="btn-secondary full-width" id="dialog-manual">Scegli manualmente cosa aggiungere</button><button class="btn-danger full-width" id="dialog-no">Sostituisci Tutto (Cancella DB)</button><button class="btn-text full-width" id="dialog-cancel">Annulla</button></div>`;
         } else {
-             customBtns = `${cancelBtn}<button class="btn-primary" id="dialog-ok">OK</button>`;
+            customBtns = `${cancelBtn}<button class="btn-primary" id="dialog-ok">OK</button>`;
         }
 
-        // MODIFICA: Aggiunto dialog-wide se è conflitto
         const wideClass = type === 'conflict' ? 'dialog-wide' : '';
 
         container.innerHTML = `<div class="custom-dialog-overlay" id="dialog-overlay"><div class="custom-dialog-box ${wideClass}"><h3>${title}</h3><div style="text-align:left; max-height:400px; overflow-y:auto; margin-bottom:10px;">${message}</div>${inputField}<div class="dialog-buttons">${customBtns}</div></div></div>`;
@@ -326,38 +310,38 @@ function renderRecipeList(list) {
     const container = document.getElementById('recipes-list');
     container.innerHTML = '';
     const groups = {
-        'primo': { title: '🍚 Primi Semplici (da abbinare a Sughi e Salse)', items: [] },
+        'primo': { title: '🍚 Primi Semplici (da abbinare a un Sugo)', items: [] },
         'sugo': { title: '🍅 Sughi e Salse', items: [] },
-        'primo_completo': { title: '🍝 Primi Completi', items: [] },
-        'secondo': { title: '🥩 Secondi Semplici (da abbinare ai Contorni)', items: [] },
+        'primo_completo': { title: '🍝 Primi Completi (Lasagne/Forni)', items: [] },
+        'secondo': { title: '🥩 Secondi Semplici (da abbinare a un contorno)', items: [] },
         'contorno': { title: '🍟 Contorni', items: [] },
         'secondo_completo': { title: '🥘 Secondi Completi', items: [] },
-        'antipasto': { title: '🥟 Antipasti e Torte Salate', items: [] },
+        'antipasto': { title: '🥟 Antipasti & Torte Salate', items: [] },
         'panificato': { title: '🥖 Pane e Pizze', items: [] },
         'dolce': { title: '🍰 Dolci', items: [] },
-        'preparazione': { title: '🥣 Preparazioni e Altro', items: [] }
+        'preparazione': { title: '🥣 Preparazioni & Altro', items: [] }
     };
     list.forEach(r => {
         if(groups[r.type]) groups[r.type].items.push(r);
         else if (groups['preparazione']) groups['preparazione'].items.push(r);
     });
-    Object.keys(groups).forEach(type => {
-        const group = groups[type];
-        if (group.items.length > 0) {
-            const header = document.createElement('div');
-            header.className = 'recipe-group-header';
-            header.innerText = group.title;
-            container.appendChild(header);
-            group.items.forEach(r => {
-                const diffStars = "⭐".repeat(r.difficulty || 1);
-                const div = document.createElement('div');
-                div.className = 'recipe-card';
-                div.onclick = () => openRecipeModal(r);
-                div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold">${r.name}</span><span style="font-size:0.75rem; color:#888;">${diffStars}</span></div><span>${r.servings}p</span>`;
-                container.appendChild(div);
-            });
-        }
-    });
+        Object.keys(groups).forEach(type => {
+            const group = groups[type];
+            if (group.items.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'recipe-group-header';
+                header.innerText = group.title;
+                container.appendChild(header);
+                group.items.forEach(r => {
+                    const diffStars = "⭐".repeat(r.difficulty || 1);
+                    const div = document.createElement('div');
+                    div.className = 'recipe-card';
+                    div.onclick = () => openRecipeModal(r);
+                    div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold">${r.name}</span><span style="font-size:0.75rem; color:var(--text-light);">${diffStars}</span></div><span>${r.servings}p</span>`;
+                    container.appendChild(div);
+                });
+            }
+        });
 }
 function filterRecipes() {
     const query = document.getElementById('search-recipe').value.toLowerCase();
@@ -519,7 +503,7 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
     const extraIdParam = isExtra ? uniqueId : 'null';
     const deleteBtn = isExtra ? `<button class="btn-icon" style="color:red;" onclick="removeManualMeal(${uniqueId})" title="Rimuovi">🗑</button>` : '';
 
-    return `<div class="meal-row-container"><div class="meal-top-row"><div class="meal-label-box" style="${labelStyle}">${labelText}</div><div class="meal-info">${namesHtml}<span style="font-size:0.6rem; color:#999;">${diffStars}</span></div></div><div class="meal-bottom-row"><div class="meal-controls"><button class="btn-icon" onclick="openRecipeDetails(${dayParam}, ${typeParam}, ${extraIdParam})" title="Leggi">📖</button><input type="number" value="${currentServings}" class="small-qty-input" onchange="changeMealServings(${dayParam}, ${typeParam}, this.value, ${extraIdParam})" title="Persone">${deleteBtn}<button class="btn-icon" onclick="openMealSelector(${dayParam}, ${typeParam}, ${extraIdParam})" title="Scegli">🔍</button>${!isExtra ? `<button class="btn-icon" onclick="regenerateSingleMeal(${day}, '${type}')" title="Randomizza">🔄</button>` : ''}</div></div></div>`;
+    return `<div class="meal-row-container"><div class="meal-top-row"><div class="meal-label-box" style="${labelStyle}">${labelText}</div><div class="meal-info">${namesHtml}<span style="font-size:0.6rem; color:var(--text-light);">${diffStars}</span></div></div><div class="meal-bottom-row"><div class="meal-controls"><button class="btn-icon" onclick="openRecipeDetails(${dayParam}, ${typeParam}, ${extraIdParam})" title="Leggi">📖</button><input type="number" value="${currentServings}" class="small-qty-input" onchange="changeMealServings(${dayParam}, ${typeParam}, this.value, ${extraIdParam})" title="Persone">${deleteBtn}<button class="btn-icon" onclick="openMealSelector(${dayParam}, ${typeParam}, ${extraIdParam})" title="Scegli">🔍</button>${!isExtra ? `<button class="btn-icon" onclick="regenerateSingleMeal(${day}, '${type}')" title="Randomizza">🔄</button>` : ''}</div></div></div>`;
 }
 
 function openRecipeDetails(day, type, extraId = null) {
@@ -541,7 +525,7 @@ function openRecipeDetails(day, type, extraId = null) {
     const items = (meal.items && Array.isArray(meal.items)) ? meal.items : [meal];
     items.forEach((subItem, idx) => {
         const ratio = currentServings / (subItem.servings || 2);
-        if (items.length > 1) htmlContent += `<h4 style="margin:10px 0 5px; color:var(--primary)">${subItem.name}</h4>`;
+        if (items.length > 1) htmlContent += `<h4 style="margin:10px 0 5px; color:var(--text)">${subItem.name}</h4>`;
         htmlContent += '<p style="font-size:0.9rem;"><b>Ingredienti:</b></p><ul style="font-size:0.9rem; padding-left:20px;">';
         const ings = typeof subItem.ingredients === 'string' ? JSON.parse(subItem.ingredients) : subItem.ingredients;
         ings.forEach(ing => {
@@ -552,10 +536,10 @@ function openRecipeDetails(day, type, extraId = null) {
         });
         htmlContent += '</ul>';
         const proc = (subItem.procedure || "Nessuna procedura.").replace(/\r?\n/g, '<br>');
-        htmlContent += `<p style="font-size:0.9rem; margin-top:5px;"><b>Procedimento:</b></p><div style="font-size:0.9rem; padding:10px; border-radius:8px;">${proc}</div>`;
+        htmlContent += `<p style="font-size:0.9rem; margin-top:5px;"><b>Procedimento:</b></p><div style="font-size:0.9rem; padding:10px; border: 1px solid; border-radius:8px;">${proc}</div>`;
         if (idx < items.length - 1) htmlContent += '<hr>';
     });
-    showCustomDialog(meal.name || "Dettagli Piatto", htmlContent, 'alert');
+        showCustomDialog(meal.name || "Dettagli Piatto", htmlContent, 'alert');
 }
 
 function renderMenuData(data) {
@@ -564,12 +548,12 @@ function renderMenuData(data) {
     const isShoppingActive = shoppingTabEl && shoppingTabEl.classList.contains('active');
     showView('view-menu');
     document.getElementById('weekly-menu-list').innerHTML = data.menu.map(d => `
-        <div class="menu-day-card">
-            <div class="menu-card-header"><h4>Giorno ${d.day}</h4></div>
-            ${renderMealControl(d.day, 'lunch', d.lunch, data.people)}
-            <hr class="meal-divider">
-            ${renderMealControl(d.day, 'dinner', d.dinner, data.people)}
-        </div>
+    <div class="menu-day-card">
+    <div class="menu-card-header"><h4>Giorno ${d.day}</h4></div>
+    ${renderMealControl(d.day, 'lunch', d.lunch, data.people)}
+    <hr class="meal-divider">
+    ${renderMealControl(d.day, 'dinner', d.dinner, data.people)}
+    </div>
     `).join('');
     const extraDiv = document.getElementById('extra-meals-list');
     extraDiv.innerHTML = '';
@@ -588,8 +572,8 @@ function renderMenuData(data) {
         const currentDessertPeople = data.dessertPeople || data.people;
         const diffStars = "⭐".repeat(data.dessert.difficulty || 1);
         desCard.innerHTML = `
-        <div class="menu-card-header"><h4>🍰 Dolce della Settimana</h4></div>
-        <div class="meal-row-container"><div class="meal-top-row"><div class="meal-label-box" style="visibility:hidden; width:0; padding:0; min-width:0;"></div><div class="meal-info"><span style="font-weight: 500;">${data.dessert.name}</span><span style="font-size:0.7rem; color:#999;">${diffStars}</span></div></div><div class="meal-bottom-row"><div class="meal-controls"><button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button><input type="number" value="${currentDessertPeople}" class="small-qty-input" onchange="changeDessertPeople(this.value)" title="Persone"><button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli">🔍</button><button class="btn-icon" onclick="regenerateDessert()" title="Cambia">🔄</button></div></div></div>`;
+        <div class="menu-card-header"><h4 style="color:#d97706">🍰 Dolce della Settimana</h4></div>
+        <div class="meal-row-container"><div class="meal-top-row"><div class="meal-label-box" style="visibility:hidden; width:0; padding:0; min-width:0;"></div><div class="meal-info"><span style="font-weight: 500;">${data.dessert.name}</span><span style="font-size:0.7rem; color:var(--text-light);">${diffStars}</span></div></div><div class="meal-bottom-row"><div class="meal-controls"><button class="btn-icon" onclick="openRecipeDetails(null, 'dessert')" title="Procedura">📖</button><input type="number" value="${currentDessertPeople}" class="small-qty-input" onchange="changeDessertPeople(this.value)" title="Persone"><button class="btn-icon" onclick="openMealSelector(null, 'dessert')" title="Scegli">🔍</button><button class="btn-icon" onclick="regenerateDessert()" title="Cambia">🔄</button></div></div></div>`;
     } else desCard.classList.add('hidden');
     renderShoppingList(data);
     if (isShoppingActive) switchTab('tab-shopping'); else switchTab('tab-menu');
@@ -599,7 +583,7 @@ function renderShoppingList(data) {
     const container = document.getElementById('shopping-container');
     const mainList = data.shoppingList.main || {};
     const extras = data.shoppingExtras || [];
-    let html = `<div class="shopping-toolbar"><button class="btn-small btn-success" onclick="addExtraItem()">+ Aggiungi</button></div>`;
+    let html = `<div class="shopping-toolbar"><button class="btn-small btn-secondary" onclick="addExtraItem()">+ Aggiungi</button></div>`;
     if (extras.length > 0) {
         html += `<div class="shopping-section-title">✨ Extra Aggiunti</div><ul class="checklist">`;
         extras.forEach(item => {
@@ -608,7 +592,7 @@ function renderShoppingList(data) {
         html += `</ul><div style="text-align:right; margin-top:5px;"><button class="btn-text" style="color:var(--accent); font-size:0.8rem;" onclick="clearManualList()">🗑 Svuota lista manuale</button></div>`;
     }
     const renderGroup = (listObj, cat) => {
-        if(Object.keys(listObj).length === 0) return '<p style="color:#999; padding:10px;">Vuoto.</p>';
+        if(Object.keys(listObj).length === 0) return '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
         let s = '';
         Object.keys(listObj).forEach(k => {
             const i = listObj[k];
@@ -641,11 +625,11 @@ function showIngredientDetails(itemKey) {
             roundedQty = Math.round(u.qty * 100) / 100;
         }
         html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-            <div style="display:flex; flex-direction:column;">
-                <span style="font-weight:bold; color:var(--primary); font-size:0.9rem;">${u.recipe}</span>
-                <span style="font-size:0.75rem;">${u.context}</span>
-            </div>
-            <span style="font-weight:bold; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
+        <div style="display:flex; flex-direction:column;">
+        <span style="font-weight:bold; color:var(--primary); font-size:0.9rem;">${u.recipe}</span>
+        <span style="font-size:0.75rem; color:#666;">${u.context}</span>
+        </div>
+        <span style="font-weight:bold; background:#eee; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
         </li>`;
     });
     html += `</ul>`;
@@ -757,26 +741,26 @@ function renderManualSelectionList(list) {
         if(groups[r.type]) groups[r.type].items.push(r);
         else if (groups['preparazione']) groups['preparazione'].items.push(r);
     });
-    let hasItems = false;
-    Object.keys(groups).forEach(key => {
-        const group = groups[key];
-        if(group.items.length > 0) {
-            hasItems = true;
-            const header = document.createElement('div');
-            header.style.marginTop = '15px'; header.style.marginBottom = '5px'; header.style.color = 'var(--primary)'; header.style.fontWeight = '800'; header.style.fontSize = '0.85rem'; header.style.textTransform = 'uppercase';
-            header.innerText = group.title;
-            container.appendChild(header);
-            group.items.forEach(r => {
-                const div = document.createElement('div');
-                div.className = 'recipe-card';
-                div.onclick = () => selectManualRecipe(r.id);
-                div.style.marginBottom = '8px';
-                div.innerHTML = `<div style="font-weight:bold; display:flex; justify-content:space-between; width:100%;"><span>${r.name}</span><span style="font-size:0.7rem; color:#888;">${"⭐".repeat(r.difficulty||1)}</span></div>`;
-                container.appendChild(div);
-            });
-        }
-    });
-    if(!hasItems) container.innerHTML = "<p>Nessuna ricetta trovata.</p>";
+        let hasItems = false;
+        Object.keys(groups).forEach(key => {
+            const group = groups[key];
+            if(group.items.length > 0) {
+                hasItems = true;
+                const header = document.createElement('div');
+                header.style.marginTop = '15px'; header.style.marginBottom = '5px'; header.style.color = 'var(--primary)'; header.style.fontWeight = '800'; header.style.fontSize = '0.85rem'; header.style.textTransform = 'uppercase';
+                header.innerText = group.title;
+                container.appendChild(header);
+                group.items.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = 'recipe-card';
+                    div.onclick = () => selectManualRecipe(r.id);
+                    div.style.marginBottom = '8px';
+                    div.innerHTML = `<div style="font-weight:bold; display:flex; justify-content:space-between; width:100%;"><span>${r.name}</span><span style="font-size:0.7rem; color:var(--text-light);">${"⭐".repeat(r.difficulty||1)}</span></div>`;
+                    container.appendChild(div);
+                });
+            }
+        });
+        if(!hasItems) container.innerHTML = "<p>Nessuna ricetta trovata.</p>";
 }
 
 function filterManualSelection() {
@@ -820,14 +804,14 @@ async function selectManualRecipe(id) {
         };
 
         if (contextSelection.type === 'manual_add') {
-             const res = await apiCall('/add-manual-meal', 'POST', payload);
-             if(res.ok) renderMenuData(await res.json());
+            const res = await apiCall('/add-manual-meal', 'POST', payload);
+            if(res.ok) renderMenuData(await res.json());
         } else {
-             payload.day = contextSelection.day;
-             payload.type = contextSelection.type;
-             payload.extraId = contextSelection.extraId;
-             const res = await apiCall('/set-manual-meal', 'POST', payload);
-             if(res.ok) renderMenuData(await res.json());
+            payload.day = contextSelection.day;
+            payload.type = contextSelection.type;
+            payload.extraId = contextSelection.extraId;
+            const res = await apiCall('/set-manual-meal', 'POST', payload);
+            if(res.ok) renderMenuData(await res.json());
         }
 
         pendingPairing = null;
@@ -885,26 +869,20 @@ async function removeManualMeal(uniqueId) {
 // IMPORT/EXPORT
 function showBackupModal() { document.getElementById('backup-modal').classList.remove('hidden'); }
 
-// MODIFICA: Export con selezione
 async function exportJSON() {
-    // 1. Carica le ricette se non sono in cache
     if (recipesCache.length === 0) {
         const res = await apiCall('/recipes');
         recipesCache = await res.json();
     }
 
-    // 2. Mostra il selettore
     const selected = await showRecipeSelectionDialog(recipesCache, "Esporta Ricette", "Esporta Selezionate");
-    if (!selected) return; // Annullato
+    if (!selected) return;
 
-    // 3. Prepara gli IDs (se null/empty esporta tutto server side, ma qui mandiamo lista)
     const payload = {};
     if (selected.length < recipesCache.length) {
-        // Se non sono tutte, manda gli ID. Altrimenti manda payload vuoto (o undefined) per scaricare tutto
         payload.ids = selected.map(r => r.id);
     }
 
-    // 4. Richiesta POST e download blob
     const res = await apiCall('/export-json', 'POST', payload);
     if(res.ok) {
         const blob = await res.blob();
@@ -923,13 +901,13 @@ function formatRecipeFull(r) {
     if(!r) return "<p>Vuoto</p>";
     const ings = r.ingredients.map(i => `<li><b>${i.name}</b>: ${i.quantity}</li>`).join('');
     return `
-        <h2 style="margin-top:0; color:var(--primary);">${r.name}</h2>
-        <p>Tipologia: ${r.type} | Difficoltà: ${r.difficulty}/5</p>
-        <hr>
-        <h4>Ingredienti</h4>
-        <ul>${ings}</ul>
-        <h4>Procedura</h4>
-        <div style="padding:15px; border-radius:12px; line-height:1.5;">${r.procedure.replace(/\n/g, '<br>')}</div>
+    <h2 style="margin-top:0; color:var(--text);">${r.name}</h2>
+    <p style="var(--text);">Tipologia: ${r.type} | Difficoltà: ${r.difficulty}/5</p>
+    <hr>
+    <h4>Ingredienti</h4>
+    <ul>${ings}</ul>
+    <h4>Procedura</h4>
+    <div style="padding:15px; border-radius:12px; border: 1px solid var(--text); line-height:1.5;">${r.procedure.replace(/\n/g, '<br>')}</div>
     `;
 }
 
@@ -940,23 +918,23 @@ function openFullComparisonOverlay() {
     const overlay = document.createElement('div');
     overlay.className = 'full-compare-modal';
     overlay.innerHTML = `
-        <div class="full-compare-header">
-            <h3>Confronto Ricette</h3>
-            <button class="btn-text" style="font-size:1.5rem;" onclick="this.closest('.full-compare-modal').remove()">&times;</button>
-        </div>
-        <div class="compare-split">
-            <div class="compare-side old-side">
-                <div class="side-tag">ATTUALE</div>
-                ${formatRecipeFull(oldR)}
-            </div>
-            <div class="compare-side new-side">
-                 <div class="side-tag">BACKUP (NUOVA)</div>
-                ${formatRecipeFull(newR)}
-            </div>
-        </div>
-        <div style="padding:20px; text-align:center;">
-            <button class="btn-secondary" onclick="this.closest('.full-compare-modal').remove()">Chiudi e torna alla scelta</button>
-        </div>
+    <div class="full-compare-header">
+    <h3>Confronto Ricette</h3>
+    <button class="btn-text" style="font-size:1.5rem;" onclick="this.closest('.full-compare-modal').remove()">&times;</button>
+    </div>
+    <div class="compare-split">
+    <div class="compare-side old-side">
+    <div class="side-tag">RICETTA ATTUALMENTE SALVATA</div>
+    ${formatRecipeFull(oldR)}
+    </div>
+    <div class="compare-side new-side">
+    <div class="side-tag">RICETTA NUOVA DEL FILE CARICATO</div>
+    ${formatRecipeFull(newR)}
+    </div>
+    </div>
+    <div style="padding:20px; text-align:center;">
+    <button class="btn-secondary" onclick="this.closest('.full-compare-modal').remove()">Chiudi e torna alla scelta</button>
+    </div>
     `;
     document.body.appendChild(overlay);
 }
@@ -968,12 +946,12 @@ function openManualPreview(r) {
     overlay.style.zIndex = '3000';
 
     overlay.innerHTML = `
-        <div class="custom-dialog-box" style="text-align:left; max-width:500px; width:95%; max-height:80vh; overflow-y:auto;">
-            ${html}
-            <div class="dialog-buttons">
-                <button class="btn-primary" id="close-preview-btn">Chiudi</button>
-            </div>
-        </div>
+    <div class="custom-dialog-box" style="text-align:left; max-width:500px; width:95%; max-height:80vh; overflow-y:auto;">
+    ${html}
+    <div class="dialog-buttons">
+    <button class="btn-primary" id="close-preview-btn">Chiudi</button>
+    </div>
+    </div>
     `;
 
     document.body.appendChild(overlay);
@@ -983,7 +961,6 @@ function openManualPreview(r) {
     };
 }
 
-// MODIFICA: Funzione generica per selezione ricette (usata da Import ed Export)
 function showRecipeSelectionDialog(recipes, title, confirmLabel) {
     return new Promise((resolve) => {
         const container = document.getElementById('custom-dialog-container');
@@ -993,32 +970,31 @@ function showRecipeSelectionDialog(recipes, title, confirmLabel) {
         sorted.forEach((r, idx) => {
             listHtml += `
             <div class="import-row">
-                <label class="import-check-area">
-                    <input type="checkbox" class="import-cb" value="${idx}">
-                    <span>${r.name}</span>
-                </label>
-                <button class="btn-icon small" title="Leggi" id="preview-${idx}">📖</button>
+            <label class="import-check-area">
+            <input type="checkbox" class="import-cb" value="${idx}">
+            <span>${r.name}</span>
+            </label>
+            <button class="btn-icon small" title="Leggi" id="preview-${idx}">📖</button>
             </div>`;
         });
         listHtml += `</div>`;
 
         container.innerHTML = `
         <div class="custom-dialog-overlay">
-            <div class="custom-dialog-box dialog-wide">
-                <h3>${title}</h3>
-                <div class="select-all-bar">
-                    <button class="btn-small btn-secondary" id="toggle-all-btn">Seleziona/Deseleziona Tutto</button>
-                    <span style="font-size:0.8rem; color:#666;">${sorted.length} ricette</span>
-                </div>
-                ${listHtml}
-                <div class="dialog-buttons">
-                    <button class="btn-secondary" id="sel-cancel">Annulla</button>
-                    <button class="btn-primary" id="sel-confirm">${confirmLabel}</button>
-                </div>
-            </div>
+        <div class="custom-dialog-box dialog-wide">
+        <h3>${title}</h3>
+        <div class="select-all-bar">
+        <button class="btn-small btn-secondary" id="toggle-all-btn">Seleziona/Deseleziona Tutto</button>
+        <span style="font-size:0.8rem; color:var(--text-light);">${sorted.length} ricette</span>
+        </div>
+        ${listHtml}
+        <div class="dialog-buttons">
+        <button class="btn-secondary" id="sel-cancel">Annulla</button>
+        <button class="btn-primary" id="sel-confirm">${confirmLabel}</button>
+        </div>
+        </div>
         </div>`;
 
-        // Event listeners per preview
         sorted.forEach((r, idx) => {
             document.getElementById(`preview-${idx}`).onclick = (e) => {
                 e.stopPropagation();
@@ -1026,10 +1002,8 @@ function showRecipeSelectionDialog(recipes, title, confirmLabel) {
             };
         });
 
-        // Event listener Select All
         document.getElementById('toggle-all-btn').onclick = () => {
             const cbs = document.querySelectorAll('.import-cb');
-            // Se tutte sono checkate, deseleziona tutto. Altrimenti seleziona tutto.
             const allChecked = Array.from(cbs).every(cb => cb.checked);
             cbs.forEach(cb => cb.checked = !allChecked);
         };
@@ -1049,14 +1023,13 @@ function showRecipeSelectionDialog(recipes, title, confirmLabel) {
     });
 }
 
-// MODIFICA: Wrapper per retrocompatibilità
 async function showManualImportSelector(recipes) {
     return showRecipeSelectionDialog(recipes, "Importa Manuale", "Importa Selezionate");
 }
 
 async function askConflictResolution(oldR, newR) {
     pendingCompareData = { oldR, newR };
-    const html = `<p>Trovato conflitto per <b>${newR.name}</b><br><small>(Simile a: ${oldR.name})</small><br>Vuoi vedere le differenze?</p>`;
+    const html = `<p>Trovato conflitto per <b>${newR.name}</b><br><small>-Simile a: </small><b>${oldR.name}</b><br>Vuoi vedere le differenze?</p>`;
     return await showCustomDialog("Conflitto", html, 'conflict');
 }
 
@@ -1122,8 +1095,8 @@ async function importJSON(el) {
                     const decision = await askConflictResolution(match, newR);
 
                     if (decision === 'yes') {
-                         await apiCall(`/recipes/${match.id}`, 'PUT', newR);
-                         updatedCount++;
+                        await apiCall(`/recipes/${match.id}`, 'PUT', newR);
+                        updatedCount++;
                     } else if (decision === 'keep_both') {
                         toInsert.push(newR);
                     } else {

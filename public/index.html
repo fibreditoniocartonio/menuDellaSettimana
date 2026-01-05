@@ -57,7 +57,7 @@
     <div id="view-recipes" class="view hidden padded">
         <div class="toolbar">
             <button class="btn-secondary btn-small" onclick="showView('view-dashboard')">⬅ Indietro</button>
-            <button class="btn-success btn-small" onclick="openRecipeModal()">+ Nuova Ricetta</button>
+            <button class="btn-primary btn-small" onclick="openRecipeModal()">+ Nuova Ricetta</button>
         </div>
         <input type="text" id="search-recipe" placeholder="🔍 Cerca ricetta..." onkeyup="filterRecipes()">
         <div id="recipes-list" style="margin-top:20px;"></div>
@@ -144,7 +144,7 @@
                 <div id="ingredients-list"></div>
                 <button type="button" class="btn-small btn-secondary full-width" id="btn-add-ing" onclick="addIngredientRow()" style="margin-bottom:20px; border-style:dashed;">+ Aggiungi Ingrediente</button>
 
-                <label style="font-size:0.9rem; font-weight:bold; display:block; margin-bottom:5px;">Procedimento</label>
+                <label style="font-size:0.9rem; font-weight:bold; display:block; margin-top:20px;">Procedimento</label>
                 <textarea id="rec-procedure" placeholder="Scrivi qui come si prepara..." oninput="autoResize(this)"></textarea>
             </fieldset>
 
@@ -163,7 +163,7 @@
             <h3 class="text-center">Genera Menu</h3>
             <p class="text-center" style="color:var(--text-light)">Per quante persone cucini solitamente?</p>
             <div style="text-align:center; margin: 20px 0;">
-                <input type="number" id="gen-people" value="2" style="font-size: 2rem; text-align: center; width: 100px; border:none; border-bottom: 2px solid var(--primary); background: transparent; border-radius:0;">
+                <input type="number" id="gen-people" value="2" style="color: var(--text); font-size: 2rem; text-align: center; width: 100px; border:none; border-bottom: 2px solid var(--accent); background: transparent; border-radius:0;">
             </div>
             <div class="modal-footer" style="justify-content: center;">
                 <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
@@ -172,25 +172,14 @@
         </div>
     </div>
 
-
-<!-- MODAL OPZIONI -->
+    <!-- MODAL OPZIONI -->
     <div id="backup-modal" class="modal hidden">
         <div class="modal-content small text-center">
             <h3>Opzioni</h3>
-
-            <div style="text-align:left; margin-bottom:15px;">
-                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Colori UI</label>
-                <select id="ui-mode-selector" onchange="changeUIMode(this.value)">
-                    <option value="auto">✨ Automatico (In base allo sfondo)</option>
-                    <option value="light">☀️ Chiaro</option>
-                    <option value="dark">🌙 Scuro</option>
-                </select>
-            </div>
-
             <div style="text-align:left; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">Tema Grafico</label>
                 <select id="theme-selector" onchange="changeTheme(this.value)">
-                    <option value="auto">✨ Automatico (Calendario)</option>
+                    <option value="auto">✨ Automatico (Stagione)</option>
                     <option value="theme-winter">❄️ Inverno</option>
                     <option value="theme-spring">🌸 Primavera</option>
                     <option value="theme-summer">🌊 Estate</option>
@@ -199,6 +188,14 @@
                     <option value="theme-easter">🐰 Pasqua</option>
                     <option value="theme-halloween">🎃 Halloween</option>
                     <option value="theme-christmas">🎄 Natale</option>
+                </select>
+
+                <!-- NUOVO SELETTORE UI -->
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px; margin-top:15px; display:block;">Colori UI</label>
+                <select id="ui-mode-selector" onchange="changeUiMode(this.value)">
+                    <option value="auto">🌗 Automatico (in base allo sfondo)</option>
+                    <option value="light">⚪ Chiaro</option>
+                    <option value="colorful">🎨 Colorato</option>
                 </select>
             </div>
             <hr style="border:0; border-top:1px dashed var(--border); margin: 20px 0;">
