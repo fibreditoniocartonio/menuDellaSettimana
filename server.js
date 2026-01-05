@@ -110,9 +110,30 @@ const categorizeWithLLM = async (shoppingListItems, settings) => {
     if (items.length === 0) return null;
 
     const prompt = `
-    Sei un assistente per la lista della spesa. Categorizza questi articoli in base a in che reparto del supermercato li posso trovare: ${JSON.stringify(items)}.
-    Rispondi ESCLUSIVAMENTE con un oggetto JSON valido.
-    Esempio formato: { "Ortofrutta": ["Mele"], "Dispensa": ["Pasta"] }
+    Sei un assistente logistico per la spesa al supermercato.
+    Il tuo compito è organizzare la lista della spesa non per tipo di cibo, ma per **CORSIA DEL SUPERMERCATO**.
+
+    Regole TASSATIVE:
+    1. Usa SOLAMENTE le seguenti categorie (scritte esattamente così):
+    - "Ortofrutta" (Frutta e verdura fresca, aromi freschi)
+    - "Macelleria e Pesce" (Carne fresca, pesce fresco, banco taglio)
+    - "Banco Frigo" (Latticini, uova, pasta fresca, affettati confezionati, yogurt, burro)
+    - "Dispensa" (Pasta secca, riso, conserve, sughi pronti, scatolame, olio, spezie, caffè, farina, zucchero, pane confezionato a lunga conservazione)
+    - "Panetteria" (Pane fresco, focacce da forno)
+    - "Surgelati" (TUTTO ciò che è congelato: pesce surgelato, verdure surgelate, gelati)
+    - "Bevande" (Acqua, vino, birra, succhi)
+    - "Cura Casa e Persona" (Detersivi, carta igienica, saponi, ecc.)
+
+    2. Logica di Posizione > Semantica:
+    - Se è "Pesce surgelato" va in "Surgelati", NON in "Macelleria e Pesce".
+    - Se è "Pomodori pelati" va in "Dispensa", mentre "Pomodori freschi" va in "Ortofrutta".
+
+    3. Output:
+    - Rispondi SOLO con un oggetto JSON valido.
+    - Non scrivere nient'altro prima o dopo il JSON.
+    - Formato: { "NomeCategoria": ["Item1", "Item2"] }
+
+    Lista da categorizzare: ${JSON.stringify(items)}.
     `;
 
     try {
@@ -141,12 +162,15 @@ const categorizeWithLLM = async (shoppingListItems, settings) => {
         const data = await response.json();
         const content = data.choices[0].message.content;
 
+        //pulizia parsing
+        const jsonString = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        const firstBrace = jsonString.indexOf('{');
+        const lastBrace = jsonString.lastIndexOf('}');
         let categorizedData;
-        try {
-            categorizedData = JSON.parse(content);
-        } catch (e) {
-            console.error("JSON AI non valido");
-            return null;
+        if (firstBrace !== -1 && lastBrace !== -1) {
+            categorizedData = JSON.parse(jsonString.substring(firstBrace, lastBrace + 1));
+        } else {
+            throw new Error("JSON non trovato nella risposta");
         }
 
         // --- VALIDAZIONE DI SICUREZZA ---
