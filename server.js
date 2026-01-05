@@ -103,7 +103,6 @@ const getCurrentSeason = () => {
 };
 
 // AI CATEGORIZATION HELPER
-// AI CATEGORIZATION HELPER
 const categorizeWithLLM = async (shoppingListItems, settings) => {
     if (!settings || !settings.llm_api_key || !settings.llm_api_url) return null;
 
@@ -211,7 +210,8 @@ const hydrateMenuWithLiveRecipes = (menuState, allRecipes) => {
 };
 
 // --- LOGICA LISTA DELLA SPESA ---
-const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName) => {
+// Modificato per accettare flag isManual
+const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName, isManual = false, extraId = null, manualCategory = null) => {
     const key = name.trim().toLowerCase();
     const qtyNum = parseFloat(qtyRaw.toString().replace(',', '.'));
     const calculatedQty = isNaN(qtyNum) ? 0 : (qtyNum * ratio);
@@ -221,8 +221,19 @@ const updateShoppingItem = (list, name, qtyRaw, ratio, context, recipeName) => {
             total: 0,
             isQb: false,
             originalName: name,
+            isManual: isManual, // Flag per identificare ingredienti manuali
+            extraId: extraId,   // ID per l'eliminazione
+            categoryHint: manualCategory, // Suggerimento categoria (se manuale)
             usages: []
         };
+    } else {
+        // Se esiste già, ereditiamo il flag manuale se presente (ma un ingrediente può essere sia manuale che ricetta)
+        // Preferiamo mantenere isManual true solo se è SOLO manuale? No, permettiamo eliminazione se ha extraId.
+        if (isManual) {
+            list[key].isManual = true;
+            list[key].extraId = extraId;
+            if(manualCategory) list[key].categoryHint = manualCategory;
+        }
     }
 
     list[key].usages.push({
@@ -265,10 +276,12 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people, context
 async function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople, oldState = {}) {
     const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
     const overrides = oldState.shoppingOverrides || {};
-    const extras = oldState.shoppingExtras || [];
+    // Recuperiamo gli extra manuali salvati
+    const manualExtras = oldState.shoppingExtras || [];
 
     const listCombinedRaw = {};
 
+    // 1. Processo Ricette Menu
     menu.forEach(day => {
         ['lunch', 'dinner'].forEach(slot => {
             const context = `Giorno ${day.day} (${slot === 'lunch' ? 'Pranzo' : 'Cena'})`;
@@ -276,17 +289,38 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
         });
     });
 
+    // 2. Processo Pasti Extra (Ricette complete aggiunte a mano)
     if (extraMeals && Array.isArray(extraMeals)) {
         extraMeals.forEach(meal => {
             processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people, "Extra");
         });
     }
 
+    // 3. Processo Dolce
     if(dessert) {
         const dRatio = (dessertPeople || people) / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
         ingredients.forEach(ing => {
             updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, dRatio, "Dolce", dessert.name);
+        });
+    }
+
+    // 4. MERGE DEGLI EXTRA MANUALI NELLA LISTA PRINCIPALE
+    // Qui soddisfiamo la richiesta di "non fare l'area a parte"
+    if (manualExtras && Array.isArray(manualExtras)) {
+        manualExtras.forEach(item => {
+            // updateShoppingItem gestisce la somma se esiste già
+            updateShoppingItem(
+                listCombinedRaw,
+                item.name,
+                item.qty,
+                1,
+                "Manuale",
+                "Aggiunto a mano",
+                true, // isManual
+                item.id, // ID univoco per cancellazione
+                item.category // Passiamo la categoria se c'è
+            );
         });
     }
 
@@ -324,6 +358,9 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
                 qty: displayQty,
                 checked: isChecked,
                 isModified: hasOverride,
+                isManual: item.isManual, // Passiamo info al frontend
+                extraId: item.extraId,   // Passiamo ID al frontend
+                categoryHint: item.categoryHint,
                 usages: item.usages
             };
         });
@@ -332,32 +369,80 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
 
     const mainList = formatList(listCombinedRaw, oldMain, 'main');
 
-    // Gestione AI Categories
+    // Gestione Categorie
     let categories = null;
 
-    // Se c'erano già categorie salvate e la lista non è cambiata drasticamente, potremmo tenerle,
-    // ma qui rigeneriamo se richiesto o se non esistono.
-    // Recuperiamo le impostazioni DB
+    // Se ci sono categorie vecchie, cerchiamo di preservarle o aggiornarle con i nuovi manuali
+    if (oldState.shoppingList && oldState.shoppingList.categories) {
+        categories = oldState.shoppingList.categories;
+
+        // Se un item manuale ha una categoria specificata ed è nuovo, aggiungiamolo
+        Object.keys(mainList).forEach(itemName => {
+            const item = mainList[itemName];
+            if (item.isManual && item.categoryHint) {
+                // Rimuovi da altre categorie se presente (spostamento)
+                Object.keys(categories).forEach(c => {
+                    if(categories[c].includes(itemName)) {
+                        // Non facciamo nulla se è già lì, altrimenti rimuoviamo?
+                        // Per semplicità: l'ultima categoria vince se specificata manualmente
+                    }
+                });
+
+                if (!categories[item.categoryHint]) categories[item.categoryHint] = [];
+                if (!categories[item.categoryHint].includes(itemName)) {
+                    categories[item.categoryHint].push(itemName);
+                }
+            }
+        });
+    }
+
+    // Se non ci sono categorie (prima volta), proviamo AI
+    // Nota: L'AI viene chiamata solo alla generazione del menu o se forzato,
+    // qui manteniamo le categorie esistenti per velocità negli update parziali.
     const settings = await new Promise(resolve => {
         db.get("SELECT * FROM settings WHERE id = 1", (err, row) => resolve(row));
     });
 
-    if (settings && settings.llm_api_key) {
+    if (!categories && settings && settings.llm_api_key) {
         const aiGroups = await categorizeWithLLM(mainList, settings);
         if (aiGroups) {
             categories = aiGroups;
         }
     }
 
-    // Se l'AI fallisce o non è configurata, manteniamo le vecchie categorie se valide, o null.
-    if (!categories && oldState.shoppingList && oldState.shoppingList.categories) {
-        categories = oldState.shoppingList.categories;
+    // Se le categorie sono attive (generate ora da IA o ereditate)
+    if (categories && Object.keys(categories).length > 0) {
+        // Creiamo un Set di tutti gli item già categorizzati per ricerca veloce
+        const categorizedItems = new Set(Object.values(categories).flat());
+
+        Object.keys(mainList).forEach(itemName => {
+            const item = mainList[itemName];
+
+            // Se è un item MANUALE e NON si trova in nessuna categoria
+            if (item.isManual && !categorizedItems.has(itemName)) {
+                // Assicuriamoci che esista la categoria "Altro"
+                if (!categories["Altro"]) categories["Altro"] = [];
+
+                // Aggiungiamolo se non c'è già
+                if (!categories["Altro"].includes(itemName)) {
+                    categories["Altro"].push(itemName);
+                }
+
+                // Aggiorniamo anche l'hint nell'item per coerenza futura
+                item.categoryHint = "Altro";
+
+                // Aggiorniamo anche l'array raw manualExtras per persistenza nel DB
+                // (così al prossimo giro ha già la categoria salvata)
+                const rawExtra = manualExtras.find(e => toTitleCase(e.name) === itemName);
+                if (rawExtra) rawExtra.category = "Altro";
+            }
+        });
     }
 
     return {
         shoppingList: { main: mainList, categories: categories },
         shoppingOverrides: overrides,
-        shoppingExtras: extras
+        shoppingExtras: manualExtras // Manteniamo l'array raw per poterlo salvare nel DB
     };
 }
 
@@ -466,7 +551,9 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
         if (!errState && rowState && rowState.data) {
             try {
                 const oldData = JSON.parse(rowState.data);
-                if (oldData.shoppingExtras) preservedExtras = [...oldData.shoppingExtras];
+                if (oldData.shoppingExtras) {
+                    preservedExtras = oldData.shoppingExtras.filter(e => !e.checked);
+                }
             } catch (e) {}
         }
 
@@ -608,16 +695,17 @@ app.post('/api/toggle-shopping-item', checkAuth, (req, res) => {
     db.get("SELECT data FROM menu_state WHERE id = 1", async (err, row) => {
         if (!row) return res.status(400).json({ error: "No menu" });
         let s = JSON.parse(row.data);
-        if (isExtra) {
-            const e = s.shoppingExtras.find(x => x.name === item);
-            if(e) e.checked = !e.checked;
-        } else {
-            // Nota: 'category' qui è sempre 'main' per la logica di backend,
-            // anche se il frontend visualizza in gruppi.
-            if (s.shoppingList.main[item]) s.shoppingList.main[item].checked = !s.shoppingList.main[item].checked;
+        // Ora tutti gli item sono in shoppingList.main, indipendentemente da isExtra
+        // isExtra (o meglio isManual) è solo un flag.
+        if (s.shoppingList.main[item]) s.shoppingList.main[item].checked = !s.shoppingList.main[item].checked;
+
+        // Se è un manual extra, dobbiamo aggiornare anche lo stato in shoppingExtras per persistenza
+        // Cerchiamo nell'array raw
+        if (s.shoppingExtras) {
+            const extraRaw = s.shoppingExtras.find(x => x.name.toLowerCase() === item.toLowerCase());
+            if (extraRaw) extraRaw.checked = s.shoppingList.main[item].checked;
         }
 
-        // Salvataggio semplice senza ricalcolo AI per velocità
         db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(s)], () => {
             res.json({ success: true });
         });
@@ -630,28 +718,117 @@ app.post('/api/update-shopping-qty', checkAuth, (req, res) => {
         if (!row) return res.status(400).json({ error: "No menu" });
         let s = JSON.parse(row.data);
         if (!s.shoppingOverrides) s.shoppingOverrides = {};
-        s.shoppingOverrides[`main_${item}`] = newQty; // Forziamo 'main' perché l'override key è basata su quello
+        s.shoppingOverrides[`main_${item}`] = newQty;
+
+        // Se è un manual item, aggiorniamo anche la quantità base nel DB per futuri ricalcoli
+        if (s.shoppingExtras) {
+            const extraRaw = s.shoppingExtras.find(x => toTitleCase(x.name) === item);
+            if (extraRaw) extraRaw.qty = newQty;
+        }
+
         await saveState(res, s);
+    });
+});
+
+// Endpoint Aggiorna categoria
+app.post('/api/update-shopping-category', checkAuth, (req, res) => {
+    const { item, newCategory } = req.body;
+    db.get("SELECT data FROM menu_state WHERE id = 1", async (err, row) => {
+        if (!row) return res.status(400).json({ error: "No menu" });
+        let s = JSON.parse(row.data);
+
+        if (!s.shoppingList.categories) s.shoppingList.categories = {};
+        let cats = s.shoppingList.categories;
+
+        // Rimuove l'item dalla vecchia categoria
+        Object.keys(cats).forEach(c => {
+            if (Array.isArray(cats[c])) {
+                cats[c] = cats[c].filter(i => i !== item);
+                if (cats[c].length === 0) delete cats[c];
+            }
+        });
+
+        // Aggiunge alla nuova
+        if (!cats[newCategory]) cats[newCategory] = [];
+        if (!cats[newCategory].includes(item)) {
+            cats[newCategory].push(item);
+        }
+
+        // Se è un manual item, salviamo la categoria nell'oggetto extra per persistenza
+        if (s.shoppingExtras) {
+            const extraRaw = s.shoppingExtras.find(x => toTitleCase(x.name) === item);
+            if (extraRaw) extraRaw.category = newCategory;
+        }
+
+        s.shoppingList.categories = cats;
+
+        db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(s)], () => {
+            res.json(s);
+        });
     });
 });
 
 app.post('/api/add-shopping-extra', checkAuth, (req, res) => {
-    const { name, qty } = req.body;
+    const { name, qty, category } = req.body;
     db.get("SELECT data FROM menu_state WHERE id = 1", async (err, row) => {
         if (!row) return res.status(400).json({ error: "No menu" });
         let s = JSON.parse(row.data);
         if (!s.shoppingExtras) s.shoppingExtras = [];
-        s.shoppingExtras.push({ id: Date.now(), name: toTitleCase(name), qty, checked: false });
+
+        const newExtra = {
+            id: Date.now(),
+           name: toTitleCase(name),
+           qty,
+           checked: false,
+           category: category
+        };
+
+        s.shoppingExtras.push(newExtra);
         await saveState(res, s);
     });
 });
 
-app.post('/api/remove-shopping-extra', checkAuth, (req, res) => {
-    const { id } = req.body;
+app.post('/api/delete-manual-shopping-item', checkAuth, (req, res) => {
+    let { extraId, name } = req.body;
+
     db.get("SELECT data FROM menu_state WHERE id = 1", async (err, row) => {
         if (!row) return res.status(400).json({ error: "No menu" });
         let s = JSON.parse(row.data);
-        s.shoppingExtras = s.shoppingExtras.filter(e => e.id !== id);
+
+        // 1. Rimuovi da shoppingExtras
+        if (s.shoppingExtras) {
+            if (extraId) {
+                // Se abbiamo l'ID, troviamo il nome prima di cancellare (serve per pulire le categorie)
+                const target = s.shoppingExtras.find(e => e.id == extraId);
+                if (target) name = target.name;
+
+                s.shoppingExtras = s.shoppingExtras.filter(e => e.id != extraId);
+            } else if (name) {
+                // Fallback eliminazione per nome
+                s.shoppingExtras = s.shoppingExtras.filter(e => e.name.toLowerCase() !== name.toLowerCase());
+            }
+        }
+
+        // 2. Rimuovi eventuali override associati
+        if (name && s.shoppingOverrides) {
+            const key = `main_${toTitleCase(name)}`;
+            if(s.shoppingOverrides[key]) delete s.shoppingOverrides[key];
+        }
+
+        // Se l'ingrediente era in una categoria e questa diventa vuota, eliminiamo la categoria.
+        if (name && s.shoppingList && s.shoppingList.categories) {
+            const cats = s.shoppingList.categories;
+            Object.keys(cats).forEach(c => {
+                if (Array.isArray(cats[c])) {
+                    // Filtra via l'ingrediente eliminato (case insensitive per sicurezza)
+                    cats[c] = cats[c].filter(i => i.toLowerCase() !== name.toLowerCase());
+                    // Se la categoria ora è vuota, eliminala
+                    if (cats[c].length === 0) delete cats[c];
+                }
+            });
+            s.shoppingList.categories = cats;
+        }
+
         await saveState(res, s);
     });
 });

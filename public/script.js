@@ -9,6 +9,8 @@ let isMenuLoaded = false;
 let pendingPairing = null;
 // STATO PER CONFRONTO IMPORT
 let pendingCompareData = null;
+// STATO PER CATEGORIE APERTE (SPESA)
+let openShoppingCategories = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
     // Inizializza select UI
@@ -200,7 +202,35 @@ function isFuzzyMatch(str1, str2) {
 function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
     return new Promise((resolve) => {
         const container = document.getElementById('custom-dialog-container');
-        let inputField = type === 'prompt' ? `<input type="text" id="dialog-input" value="${defaultValue}" class="full-width" style="margin-top:10px;">` : '';
+        let inputField = '';
+        if (type === 'prompt') {
+            inputField = `<input type="text" id="dialog-input" value="${defaultValue}" class="full-width" style="margin-top:10px;">`;
+        } else if (type === 'add_shopping_item') {
+            const categories = (currentMenuData && currentMenuData.shoppingList && currentMenuData.shoppingList.categories) ? Object.keys(currentMenuData.shoppingList.categories) : [];
+
+            let catSelectHtml = '';
+            if (categories.length > 0) {
+                // Ordine Alfabetico A-Z
+                categories.sort((a, b) => a.localeCompare(b));
+
+                let options = categories.map(c => `<option value="${c}">${c}</option>`).join('');
+                options += `<option value="__NEW__">+ Nuova Categoria...</option>`;
+
+                catSelectHtml = `
+                <select id="dialog-cat" class="full-width" style="margin-top:5px;" onchange="handleCategoryChange(this, 'dialog-new-cat')">
+                ${options}
+                </select>
+                <input type="text" id="dialog-new-cat" placeholder="Nome nuova categoria..." class="full-width" style="margin-top:5px; display:none;">
+                `;
+            }
+
+            inputField = `
+            <input type="text" id="dialog-name" placeholder="Nome Ingrediente" class="full-width" style="margin-top:10px;">
+            <input type="text" id="dialog-qty" placeholder="Quantità (es. 1 o 500g)" class="full-width" style="margin-top:5px;">
+            ${catSelectHtml}
+            `;
+        }
+
         const cancelBtn = type !== 'alert' ? `<button class="btn-secondary" id="dialog-cancel">Annulla</button>` : '';
 
         let customBtns = '';
@@ -236,24 +266,50 @@ function showCustomDialog(title, message, type = 'alert', defaultValue = '') {
         const keepBoth = document.getElementById('dialog-keep-both');
         const compare = document.getElementById('dialog-compare');
 
+        // Focus sul primo input disponibile
         if(input) input.focus();
+        else if(document.getElementById('dialog-name')) document.getElementById('dialog-name').focus();
+
         const close = (res) => { container.innerHTML = ''; resolve(res); };
 
-        if(ok) ok.onclick = () => close(type === 'prompt' ? input.value : true);
-        if(cancel) cancel.onclick = () => close(false);
-        if(yes) yes.onclick = () => close('yes');
-        if(no) no.onclick = () => close('no');
-        if(manual) manual.onclick = () => close('manual');
-        if(keepBoth) keepBoth.onclick = () => close('keep_both');
+        if(ok) ok.onclick = () => {
+            if (type === 'prompt') close(input.value);
+            else if (type === 'add_shopping_item') {
+                const name = document.getElementById('dialog-name').value;
+                const qty = document.getElementById('dialog-qty').value;
 
-        if(type === 'pairing' && yes) yes.onclick = () => close('pair');
-        if(type === 'pairing' && no) no.onclick = () => close('single');
+                // Gestione categoria condizionale
+                const catEl = document.getElementById('dialog-cat');
+                const newCatEl = document.getElementById('dialog-new-cat');
 
-        if(compare) {
-            compare.onclick = () => {
-                openFullComparisonOverlay();
-            };
-        }
+                let cat = null;
+                if (catEl) { // Leggiamo solo se il selettore esiste
+                    cat = catEl.value;
+                    if (cat === '__NEW__') {
+                        cat = newCatEl.value.trim();
+                    }
+                }
+
+                if(!name) { close(false); return; }
+                close({ name, qty, category: cat });
+            }
+            else close(true);
+        };
+
+            if(cancel) cancel.onclick = () => close(false);
+            if(yes) yes.onclick = () => close('yes');
+            if(no) no.onclick = () => close('no');
+            if(manual) manual.onclick = () => close('manual');
+            if(keepBoth) keepBoth.onclick = () => close('keep_both');
+
+            if(type === 'pairing' && yes) yes.onclick = () => close('pair');
+            if(type === 'pairing' && no) no.onclick = () => close('single');
+
+            if(compare) {
+                compare.onclick = () => {
+                    openFullComparisonOverlay();
+                };
+            }
     });
 }
 async function showAlert(m) { await showCustomDialog("Avviso", `<p>${m}</p>`, 'alert'); }
@@ -337,7 +393,7 @@ function renderRecipeList(list) {
     const groups = {
         'primo': { title: '🍚 Primi Semplici (da abbinare a un Sugo)', items: [] },
         'sugo': { title: '🍅 Sughi e Salse', items: [] },
-        'primo_completo': { title: '🍝 Primi Completi (Lasagne/Forni)', items: [] },
+        'primo_completo': { title: '🍝 Primi Completi', items: [] },
         'secondo': { title: '🥩 Secondi Semplici (da abbinare a un contorno)', items: [] },
         'contorno': { title: '🍟 Contorni', items: [] },
         'secondo_completo': { title: '🥘 Secondi Completi', items: [] },
@@ -350,27 +406,69 @@ function renderRecipeList(list) {
         if(groups[r.type]) groups[r.type].items.push(r);
         else if (groups['preparazione']) groups['preparazione'].items.push(r);
     });
+
         Object.keys(groups).forEach(type => {
             const group = groups[type];
             if (group.items.length > 0) {
+                // Container Gruppo
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'recipe-group';
+
+                // Header Cliccabile
                 const header = document.createElement('div');
                 header.className = 'recipe-group-header';
-                header.innerText = group.title;
-                container.appendChild(header);
+                header.style.cursor = 'pointer';
+                header.innerText = `${group.title} +`;
+
+                // Contenitore Card (Nascosto di default)
+                const cardsContainer = document.createElement('div');
+                cardsContainer.className = 'recipe-group-content hidden';
+
+                // Toggle click
+                header.onclick = () => {
+                    const isHidden = cardsContainer.classList.contains('hidden');
+                    if (isHidden) {
+                        cardsContainer.classList.remove('hidden');
+                        header.innerText = `${group.title} -`;
+                    } else {
+                        cardsContainer.classList.add('hidden');
+                        header.innerText = `${group.title} +`;
+                    }
+                };
+
                 group.items.forEach(r => {
                     const diffStars = "⭐".repeat(r.difficulty || 1);
                     const div = document.createElement('div');
                     div.className = 'recipe-card';
                     div.onclick = () => openRecipeModal(r);
                     div.innerHTML = `<div style="display:flex; flex-direction:column;"><span style="font-weight:bold">${r.name}</span><span style="font-size:0.75rem; color:var(--text-light);">${diffStars}</span></div><span>${r.servings}p</span>`;
-                    container.appendChild(div);
+                    cardsContainer.appendChild(div);
                 });
+
+                groupDiv.appendChild(header);
+                groupDiv.appendChild(cardsContainer);
+                container.appendChild(groupDiv);
             }
         });
 }
+
 function filterRecipes() {
     const query = document.getElementById('search-recipe').value.toLowerCase();
-    renderRecipeList(recipesCache.filter(r => r.name.toLowerCase().includes(query)));
+
+    // Se la query è vuota, ricarica la lista standard (tutto chiuso)
+    if (!query) {
+        renderRecipeList(recipesCache);
+        return;
+    }
+
+    // Filtra e forza l'apertura dei gruppi
+    const filtered = recipesCache.filter(r => r.name.toLowerCase().includes(query));
+    renderRecipeList(filtered);
+
+    // Espandi tutti i gruppi se c'è una ricerca attiva
+    document.querySelectorAll('.recipe-group-header').forEach(h => {
+        h.click(); // Simula click per aprire
+    });
 }
 
 // --- MODALE RICETTA ---
@@ -487,7 +585,23 @@ async function deleteCurrentRecipe() {
 }
 
 // --- MENU & DASHBOARD ---
-function showGenerateModal() { document.getElementById('generate-modal').classList.remove('hidden'); }
+function showGenerateModal() {
+    // Reset del contenuto del modale nel caso sia stato modificato da una generazione precedente
+    const modalContent = document.querySelector('#generate-modal .modal-content');
+    modalContent.innerHTML = `
+    <h3 class="text-center">Genera Menu</h3>
+    <p class="text-center" style="color:var(--text-light)">Per quante persone cucini solitamente?</p>
+    <div style="text-align:center; margin: 20px 0;">
+    <input type="number" id="gen-people" value="2" style="color: var(--text); font-size: 2rem; text-align: center; width: 100px; border:none; border-bottom: 2px solid var(--accent); background: transparent; border-radius:0;">
+    </div>
+    <div class="modal-footer" style="justify-content: center;">
+    <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
+    <button class="btn-primary" onclick="generateMenu()">Genera Ora!</button>
+    </div>
+    `;
+    document.getElementById('generate-modal').classList.remove('hidden');
+}
+
 async function loadLastMenu() {
     const res = await apiCall('/last-menu');
     const data = await res.json();
@@ -499,28 +613,35 @@ async function loadLastMenu() {
         switchTab('tab-menu');
     }
 }
+
 async function generateMenu() {
     const people = document.getElementById('gen-people').value;
-    document.getElementById('generate-modal').classList.add('hidden');
 
-    // Mostra loading o feedback
-    const btn = document.querySelector('.card-action[onclick="showGenerateModal()"] p');
-    const originalText = btn.innerText;
-    btn.innerText = "Generazione in corso...";
+    // UI Loading state
+    const modalContent = document.querySelector('#generate-modal .modal-content');
+    modalContent.innerHTML = `
+    <h3 class="text-center">Genera Menu</h3>
+    <div style="text-align:center; margin: 30px 0;">
+    <div style="font-size:2rem; animation: spin 1s linear infinite; display:inline-block;">⌛</div>
+    <p>Generazione in corso...</p>
+    <p style="font-size:0.8rem; color:var(--text-light)">L'AI sta organizzando la spesa</p>
+    </div>
+    `;
 
     try {
         const res = await apiCall('/generate-menu', 'POST', { people });
         if(res.ok) {
             isMenuLoaded = true;
             renderMenuData(await res.json());
+            document.getElementById('generate-modal').classList.add('hidden');
         } else {
             const err = await res.json();
+            document.getElementById('generate-modal').classList.add('hidden');
             await showAlert(err.error);
         }
     } catch(e) {
+        document.getElementById('generate-modal').classList.add('hidden');
         await showAlert("Errore di connessione.");
-    } finally {
-        btn.innerText = originalText;
     }
 }
 
@@ -640,107 +761,314 @@ function renderMenuData(data) {
     if (isShoppingActive) switchTab('tab-shopping'); else switchTab('tab-menu');
 }
 
+function handleCategoryChange(select, inputId) {
+    const input = document.getElementById(inputId);
+    if (select.value === '__NEW__') {
+        input.style.display = 'block';
+        input.focus();
+    } else {
+        input.style.display = 'none';
+        input.value = ''; // Reset
+    }
+}
+
 function renderShoppingList(data) {
     const container = document.getElementById('shopping-container');
     const mainList = data.shoppingList.main || {};
-    const categories = data.shoppingList.categories; // Se esiste, è la lista categorizzata
-    const extras = data.shoppingExtras || [];
+    const categories = data.shoppingList.categories || {};
 
-    let html = `<div class="shopping-toolbar"><button class="btn-small btn-secondary" onclick="addExtraItem()">+ Aggiungi</button></div>`;
+    // Costruisci Header (Layout Flex: Titolo a sinistra, Stack pulsanti a destra)
+    let hasCategories = categories && Object.keys(categories).length > 0;
 
-    // Lista Extra Manuali
-    if (extras.length > 0) {
-        html += `<div class="shopping-section-title">✨ Extra Aggiunti</div><ul class="checklist">`;
-        extras.forEach(item => {
-            html += `<li class="${item.checked ? 'checked' : ''}" id="extra-${item.id}"><div class="check-area" onclick="toggleShoppingItem(null, '${item.name}', true, this)"><span class="check-icon">${item.checked ? '✔' : ''}</span><span>${item.name}</span></div><div class="qty-area"><b>${item.qty}</b><button class="btn-text" onclick="removeExtraItem(${item.id})">🗑</button></div></li>`;
-        });
-        html += `</ul><div style="text-align:right; margin-top:5px;"><button class="btn-text" style="color:var(--accent); font-size:0.8rem;" onclick="clearManualList()">🗑 Svuota lista manuale</button></div>`;
+    // Calcola stato apertura categorie per il bottone
+    let allOpen = false;
+    if(hasCategories) {
+        const allCatKeys = Object.keys(categories);
+        allOpen = allCatKeys.every(k => openShoppingCategories.has(k));
     }
+    const expandBtnText = allOpen ? "Chiudi Categorie" : "Espandi Categorie";
+    const expandBtnStyle = hasCategories ? "" : "display:none;";
 
-    html += `<div class="shopping-section-title">🛒 Lista della Spesa <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica">⟲</button></div>`;
+    // Stili inline per il layout dell'header della spesa
+    const headerHtml = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div class="shopping-section-title" style="margin:0; display:flex; align-items:center; gap:10px;">
+    🛒 Lista della Spesa
+    <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica" style="font-size:1.2rem; cursor:pointer;">⟲</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:5px;">
+    <button class="btn-small btn-secondary" onclick="addExtraItem()" style="white-space:nowrap;">+ Aggiungi in lista</button>
+    <button class="btn-small shopping-section-title" onclick="toggleAllCategories()" style="${expandBtnStyle}; white-space:nowrap; font-size:0.8rem; margin: 0; width: 100%; border-radius: 12px;">${expandBtnText}</button>
+    </div>
+    </div>
+    `;
 
-    // Funzione helper per renderizzare un singolo item
+    container.innerHTML = headerHtml;
+
+    // Helper per renderizzare un singolo item
     const renderItem = (k, listObj) => {
         const i = listObj[k];
         const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
-        const rowId = `main-${safeKey}`; // ID coerente sempre 'main' per coerenza DB
+        const rowId = `main-${safeKey}`;
+        const itemIcon = i.isManual ? '✍️' : '📖';
+        const itemTitle = i.isManual ? 'Modifica Manuale' : 'Vedi Ricette';
 
-        let infoBtn = '';
-        if (i.usages && i.usages.length > 0) {
-            infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
-        }
+        // Icona: Libro per tutti (ora anche manuali hanno dettagli/modifica)
+        let infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="${itemTitle}">${itemIcon}</button>`;
+
         return `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('main', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area">${infoBtn}<span onclick="editShoppingQty('main', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</span></div></li>`;
     };
 
     // RENDER LOGIC: CATEGORIZED vs FLAT
-    if (categories && Object.keys(categories).length > 0) {
-        // Visualizzazione Categorizzata
-        Object.keys(categories).forEach(catName => {
+    if (hasCategories) {
+        const sortedCategories = Object.keys(categories).sort();
+
+        sortedCategories.forEach(catName => {
             const itemsInCat = categories[catName];
             if (itemsInCat && itemsInCat.length > 0) {
-                // Filtra solo quelli che esistono effettivamente in mainList (per sicurezza)
                 const validItems = itemsInCat.filter(name => mainList[name]);
                 if (validItems.length > 0) {
-                    html += `<div class="shopping-category-header">${catName}</div><ul class="checklist">`;
-                    validItems.forEach(itemName => {
-                        html += renderItem(itemName, mainList);
+                    const catContainer = document.createElement('div');
+
+                    const header = document.createElement('div');
+                    header.className = 'shopping-category-header';
+                    header.style.cursor = 'pointer';
+
+                    const ul = document.createElement('ul');
+                    ul.className = 'checklist';
+
+                    const isOpen = openShoppingCategories.has(catName);
+                    if (!isOpen) ul.classList.add('hidden');
+
+                    header.innerText = `${catName} ${isOpen ? '-' : '+'}`;
+
+                    header.onclick = () => {
+                        if (ul.classList.contains('hidden')) {
+                            ul.classList.remove('hidden');
+                            header.innerText = `${catName} -`;
+                            openShoppingCategories.add(catName);
+                        } else {
+                            ul.classList.add('hidden');
+                            header.innerText = `${catName} +`;
+                            openShoppingCategories.delete(catName);
+                        }
+                        // Aggiorna bottone espandi/chiudi
+                        renderShoppingList(currentMenuData);
+                    };
+
+                    let innerHtml = '';
+                    validItems.sort().forEach(itemName => {
+                        innerHtml += renderItem(itemName, mainList);
                     });
-                    html += `</ul>`;
+                    ul.innerHTML = innerHtml;
+
+                    catContainer.appendChild(header);
+                    catContainer.appendChild(ul);
+                    container.appendChild(catContainer);
                 }
             }
         });
 
-        // Gestione "Altro" o item non categorizzati
+        // "Altro" / Non categorizzati
         const allCategorizedItems = Object.values(categories).flat();
         const remainingItems = Object.keys(mainList).filter(k => !allCategorizedItems.includes(k));
+
         if (remainingItems.length > 0) {
-            html += `<div class="shopping-category-header">Altro / Non Categorizzato</div><ul class="checklist">`;
-            remainingItems.forEach(itemName => {
-                html += renderItem(itemName, mainList);
+            const catName = "Altro";
+            const catContainer = document.createElement('div');
+            const header = document.createElement('div');
+            header.className = 'shopping-category-header';
+            header.style.cursor = 'pointer';
+
+            const ul = document.createElement('ul');
+            ul.className = 'checklist';
+
+            const isOpen = openShoppingCategories.has(catName);
+            if (!isOpen) ul.classList.add('hidden');
+
+            header.innerText = `${catName} ${isOpen ? '-' : '+'}`;
+
+            header.onclick = () => {
+                if (ul.classList.contains('hidden')) {
+                    ul.classList.remove('hidden');
+                    header.innerText = `${catName} -`;
+                    openShoppingCategories.add(catName);
+                } else {
+                    ul.classList.add('hidden');
+                    header.innerText = `${catName} +`;
+                    openShoppingCategories.delete(catName);
+                }
+                renderShoppingList(currentMenuData);
+            };
+
+            let innerHtml = '';
+            remainingItems.sort().forEach(itemName => {
+                innerHtml += renderItem(itemName, mainList);
             });
-            html += `</ul>`;
+            ul.innerHTML = innerHtml;
+
+            catContainer.appendChild(header);
+            catContainer.appendChild(ul);
+            container.appendChild(catContainer);
         }
 
     } else {
         // Visualizzazione Classica (Flat)
         if(Object.keys(mainList).length === 0) {
-            html += '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
+            container.innerHTML += '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
         } else {
-            html += `<ul class="checklist">`;
-            Object.keys(mainList).forEach(k => {
-                html += renderItem(k, mainList);
+            let innerHtml = `<ul class="checklist">`;
+            Object.keys(mainList).sort().forEach(k => {
+                innerHtml += renderItem(k, mainList);
             });
-            html += `</ul>`;
+            innerHtml += `</ul>`;
+            container.innerHTML += innerHtml;
         }
     }
-
-    container.innerHTML = html;
 }
 
 function showIngredientDetails(itemKey) {
     if (!currentMenuData || !currentMenuData.shoppingList.main[itemKey]) return;
     const item = currentMenuData.shoppingList.main[itemKey];
 
-    if (!item.usages || item.usages.length === 0) return;
+    let html = '';
 
-    let html = `<ul style="padding-left:0; list-style:none;">`;
-    item.usages.forEach(u => {
-        let roundedQty = u.qty;
-        if (typeof u.qty === 'number') {
-            roundedQty = Math.round(u.qty * 100) / 100;
+    // SELETTORE CATEGORIA
+    const cats = (currentMenuData.shoppingList.categories) ? Object.keys(currentMenuData.shoppingList.categories) : [];
+
+    if (cats.length > 0) {
+        // Ordine Alfabetico A-Z
+        cats.sort((a, b) => a.localeCompare(b));
+
+        let options = cats.map(c => `<option value="${c}">${c}</option>`).join('');
+        options += `<option value="__NEW__">+ Nuova Categoria...</option>`;
+
+        // Trova la categoria corrente dell'item
+        let currentCat = '';
+        if (currentMenuData.shoppingList.categories) {
+            for(let c of cats) {
+                if (currentMenuData.shoppingList.categories[c].includes(itemKey)) {
+                    currentCat = c;
+                    break;
+                }
+            }
         }
-        html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-        <div style="display:flex; flex-direction:column;">
-        <span style="font-weight:bold; color:var(--text); font-size:0.9rem;">${u.recipe}</span>
-        <span style="font-size:0.75rem; color:var(--text-light);">${u.context}</span>
+
+        // HTML pulito con variabili CSS
+        html += `
+        <div style="background:var(--bg); padding:15px; border-radius:var(--radius); margin-bottom:15px; border:1px solid var(--border);">
+        <label style="font-size:0.8rem; font-weight:bold; color:var(--primary); margin-bottom:5px; display:block;">Categoria</label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:8px;">
+        <select id="move-cat-select" style="margin:0; flex:1;" onchange="handleCategoryChange(this, 'new-cat-input')">
+        ${options}
+        </select>
+        <button class="btn-primary btn-small" onclick="moveShoppingItemCategory('${itemKey.replace(/'/g, "\\'")}')">Salva</button>
         </div>
-        <span style="font-weight:bold; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
-        </li>`;
-    });
-    html += `</ul>`;
+        <input type="text" id="new-cat-input" placeholder="Nome nuova categoria..." style="display:none; width:100%;">
+        </div>
+        </div>
+        <script>
+        setTimeout(() => {
+            const sel = document.getElementById('move-cat-select');
+            // Se currentCat esiste, selezionala. Se è vuota, il browser selezionerà la prima option da solo.
+            if(sel && "${currentCat}") sel.value = "${currentCat}";
+        }, 50);
+        </script>
+        `;
+    }
+
+    // USAGES / RICETTE COLLEGATE
+    if (item.usages && item.usages.length > 0) {
+        html += `<ul style="padding-left:0; list-style:none;">`;
+        item.usages.forEach(u => {
+            let roundedQty = u.qty;
+            if (typeof u.qty === 'number') {
+                roundedQty = Math.round(u.qty * 100) / 100;
+            }
+            html += `<li style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; flex-direction:column;">
+            <span style="font-weight:bold; color:var(--text); font-size:0.9rem;">${u.recipe}</span>
+            <span style="font-size:0.75rem; color:var(--text-light);">${u.context}</span>
+            </div>
+            <span style="font-weight:bold; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${roundedQty}</span>
+            </li>`;
+        });
+        html += `</ul>`;
+    }
+
+    // Se è un item MANUALE, mostra il bottone ELIMINA
+    if (item.isManual) {
+        html += `
+        <div style="margin-top:10px; text-align:right;">
+        <button class="btn-danger full-width" onclick="deleteManualItem('${item.extraId}', '${itemKey.replace(/'/g, "\\'")}')">🗑 Elimina Ingrediente</button>
+        </div>
+        `;
+    }
 
     showCustomDialog(`${itemKey}`, html, 'alert');
+
+    // Workaround per impostare il valore della select dopo il render del modale
+    setTimeout(() => {
+        const sel = document.getElementById('move-cat-select');
+        if(sel) sel.value = currentCat;
+    }, 100);
 }
+
+// Funzione per toggle expand/collapse
+function toggleAllCategories() {
+    const categories = currentMenuData.shoppingList.categories || {};
+    const allCatKeys = Object.keys(categories);
+    if(allCatKeys.length === 0) return;
+
+    const allOpen = allCatKeys.every(k => openShoppingCategories.has(k));
+
+    if (allOpen) {
+        // Chiudi tutte
+        openShoppingCategories.clear();
+    } else {
+        // Apri tutte
+        allCatKeys.forEach(k => openShoppingCategories.add(k));
+    }
+    renderShoppingList(currentMenuData);
+}
+
+async function moveShoppingItemCategory(itemKey) {
+    const select = document.getElementById('move-cat-select');
+    const input = document.getElementById('new-cat-input');
+
+    let newCat = select.value;
+    if (newCat === '__NEW__') {
+        newCat = input.value.trim();
+        if (!newCat) { alert("Inserisci il nome della categoria"); return; }
+    }
+
+    // Se non selezionato nulla
+    if (!newCat) return;
+
+    // Chiudi dialog
+    document.getElementById('custom-dialog-container').innerHTML = '';
+
+    const res = await apiCall('/update-shopping-category', 'POST', { item: itemKey, newCategory: newCat });
+    if (res.ok) {
+        // Preserviamo apertura della nuova categoria se esiste
+        openShoppingCategories.add(newCat);
+        loadLastMenu();
+    }
+}
+
+async function deleteManualItem(extraId, name) {
+    // Chiudi modale immediatamente per UX veloce
+    document.getElementById('custom-dialog-container').innerHTML = '';
+
+    // Optimistic UI update? No, ricarichiamo veloce dal server
+    // ma possiamo mostrare un loading o attendere
+    const res = await apiCall('/delete-manual-shopping-item', 'POST', { extraId, name });
+    if (res.ok) {
+        renderMenuData(await res.json());
+    }
+}
+
 
 // --- ACTIONS & OPTIMISTIC UI ---
 function toggleShoppingItem(cat, item, isExtra, domEl) {
@@ -748,32 +1076,30 @@ function toggleShoppingItem(cat, item, isExtra, domEl) {
     const icon = li.querySelector('.check-icon');
     const isNowChecked = !li.classList.contains('checked');
     if(isNowChecked) { li.classList.add('checked'); icon.innerText = '✔'; } else { li.classList.remove('checked'); icon.innerText = ''; }
-    if (isExtra) {
-        const extraItem = currentMenuData.shoppingExtras.find(x => x.name === item);
-        if (extraItem) extraItem.checked = isNowChecked;
-    } else {
-        if (currentMenuData.shoppingList.main[item]) currentMenuData.shoppingList.main[item].checked = isNowChecked;
-    }
+
+    if (currentMenuData.shoppingList.main[item]) currentMenuData.shoppingList.main[item].checked = isNowChecked;
+
     apiCall('/toggle-shopping-item', 'POST', { category: cat, item, isExtra }).then(res => {
         if(!res.ok) { if(isNowChecked) { li.classList.remove('checked'); icon.innerText=''; } else { li.classList.add('checked'); icon.innerText='✔'; } }
     });
 }
+
+// Modificato per usare modale unico
 async function addExtraItem() {
-    const name = await showPrompt("Cosa devi comprare?"); if (!name) return;
-    const qty = await showPrompt("Quantità?", "1");
-    const res = await apiCall('/add-shopping-extra', 'POST', { name, qty });
+    const result = await showCustomDialog("Aggiungi Extra", "", 'add_shopping_item');
+    if (!result) return;
+
+    const { name, qty, category } = result;
+    const res = await apiCall('/add-shopping-extra', 'POST', { name, qty, category });
     if(res.ok) renderMenuData(await res.json());
 }
-async function removeExtraItem(id) {
-    if(!(await showConfirm("Rimuovere?"))) return;
-    const res = await apiCall('/remove-shopping-extra', 'POST', { id });
+
+async function removeManualMeal(uniqueId) {
+    if(!(await showConfirm("Rimuovere questo piatto extra?"))) return;
+    const res = await apiCall('/remove-manual-meal', 'POST', { uniqueId });
     if(res.ok) renderMenuData(await res.json());
 }
-async function clearManualList() {
-    if(!(await showConfirm("Svuotare tutto?"))) return;
-    const res = await apiCall('/clear-shopping-extras', 'POST', {});
-    if(res.ok) renderMenuData(await res.json());
-}
+
 async function editShoppingQty(cat, item, current) {
     const n = await showPrompt(`Modifica quantità per ${item}:`, current);
     if (n === false || n === null || n === current) return;
@@ -963,12 +1289,6 @@ async function selectManualRecipe(id) {
         });
         if(res.ok) renderMenuData(await res.json());
     }
-}
-
-async function removeManualMeal(uniqueId) {
-    if(!(await showConfirm("Rimuovere questo piatto extra?"))) return;
-    const res = await apiCall('/remove-manual-meal', 'POST', { uniqueId });
-    if(res.ok) renderMenuData(await res.json());
 }
 
 // IMPORT/EXPORT
@@ -1230,4 +1550,3 @@ async function importJSON(el) {
     };
     reader.readAsText(file);
 }
-

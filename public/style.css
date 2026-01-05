@@ -41,19 +41,19 @@ body.ui-colorful {
     --text-label-dinner: #ffffff;
 }
 
-body.ui-colorful .recipe-group-header,
 body.ui-colorful .menu-card-header h4,
 body.ui-colorful .card-action .icon,
 body.ui-colorful #nav-title,
 body.ui-colorful .btn-info,
-
 body.ui-colorful .btn-primary { color: var(--text); border-color: var(--text); }
+
+body.ui-colorful .recipe-group-header,
+body.ui-colorful .shopping-category-header,
 body.ui-colorful .btn-secondary {
     background: var(--accent);
     border-color: rgba(255,255,255,0.5);
     color: #ffffff;
 }
-
 
 body.ui-colorful .small-qty-input {
     background: #ffffff !important;
@@ -92,7 +92,17 @@ nav { background: var(--surface); padding: 15px 25px; display: flex; justify-con
 .card-action p { margin: 5px 0 0; font-size: 0.75rem; color: var(--text-light); }
 
 .toolbar { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
-.recipe-group-header { margin-top: 25px; margin-bottom: 10px; color: var(--primary); font-weight: 800; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; background: var(--surface); padding: 8px 16px; border-radius: 20px; width: fit-content; }
+
+/* MODIFICATO: Cursor pointer per header cliccabili */
+.recipe-group-header {
+    margin-top: 25px; margin-bottom: 10px;
+    color: var(--primary); font-weight: 800; font-size: 0.9rem;
+    text-transform: uppercase; letter-spacing: 1px;
+    background: var(--surface); padding: 8px 16px;
+    border-radius: 20px; width: fit-content;
+    cursor: pointer; user-select: none;
+}
+
 .recipe-card { background: var(--surface); padding: 15px 20px; border-radius: var(--radius); display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; transition: transform 0.1s; }
 .recipe-card:active { transform: scale(0.98); background: #fafafa; }
 
@@ -136,9 +146,9 @@ nav { background: var(--surface); padding: 15px 25px; display: flex; justify-con
 .meal-controls { display: flex; align-items: center; gap: 8px; }
 .small-qty-input { width: 40px !important; padding: 6px !important; margin: 0 !important; text-align: center; font-weight: bold; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; color: var(--primary); }
 
-.shopping-toolbar { display: flex; gap: 10px; margin-bottom: 20px; justify-content: flex-end; }
 .shopping-section-title { font-weight: 700; color: var(--text); margin: 20px 0 10px; font-size: 1rem; background: var(--surface); padding: 8px 16px; border-radius: 20px; width: fit-content; display: flex; align-items: center; gap: 10px; }
 
+/* MODIFICATO: Cursor pointer per categorie spesa */
 .shopping-category-header {
     font-size: 0.85rem; font-weight: 800; text-transform: uppercase;
     color: var(--text); margin: 15px 0 5px 10px;
@@ -147,6 +157,8 @@ nav { background: var(--surface); padding: 15px 25px; display: flex; justify-con
     width: fit-content;
     padding: 5px;
     border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
 }
 
 .checklist { list-style: none; padding: 0; }
@@ -313,7 +325,6 @@ body.ui-colorful .btn-refresh { color: white; }
     margin: 0;
     width: auto;
 }
-/* Modale largo per import */
 .dialog-wide {
     max-width: 600px !important;
     width: 95% !important;
@@ -335,4 +346,10 @@ body.ui-colorful .btn-refresh { color: white; }
     justify-content: space-between;
     align-items: center;
     margin-bottom: 5px;
+}
+
+/*Animazione Spin */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
