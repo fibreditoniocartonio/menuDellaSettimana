@@ -47,7 +47,7 @@
             <div class="card-action" onclick="showBackupModal()">
                 <div class="icon">💾</div>
                 <h3>Opzioni</h3>
-                <p>Backup / Ripristino</p>
+                <p>Backup / AI / Ripristino</p>
             </div>
         </div>
         <input type="file" id="json-file" class="hidden" accept=".json" onchange="importJSON(this)">
@@ -140,6 +140,15 @@
                     </select>
                 </div>
 
+                <!-- SEZIONE STAGIONALITÀ -->
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px; margin-top:10px; display:block;">Stagionalità</label>
+                <div class="season-selector">
+                    <label class="season-badge"><input type="checkbox" class="season-cb" value="inverno"> ❄️ Inverno</label>
+                    <label class="season-badge"><input type="checkbox" class="season-cb" value="primavera"> 🌸 Primavera</label>
+                    <label class="season-badge"><input type="checkbox" class="season-cb" value="estate"> 🌊 Estate</label>
+                    <label class="season-badge"><input type="checkbox" class="season-cb" value="autunno"> 🍂 Autunno</label>
+                </div>
+
                 <label style="font-size:0.9rem; font-weight:bold; display:block; margin: 15px 0 5px;">Ingredienti</label>
                 <div id="ingredients-list"></div>
                 <button type="button" class="btn-small btn-secondary full-width" id="btn-add-ing" onclick="addIngredientRow()" style="margin-bottom:20px; border-style:dashed;">+ Aggiungi Ingrediente</button>
@@ -198,6 +207,20 @@
                     <option value="colorful">🎨 Colorato</option>
                 </select>
             </div>
+
+            <hr style="border:0; border-top:1px dashed var(--border); margin: 20px 0;">
+
+            <!-- AI SETTINGS -->
+            <div style="text-align:left; margin-bottom:20px;">
+                <p style="font-size:0.9rem; color:var(--text-light); margin-bottom:10px;">Impostazioni AI (Lista Spesa Intelligente)</p>
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">API Endpoint (es. https://api.groq.com/openai/v1/chat/completions)</label>
+                <input type="text" id="ai-endpoint" placeholder="https://api.groq.com/openai/v1/chat/completions">
+
+                <label style="font-size:0.8rem; color:var(--text-light); margin-left:5px;">API Key</label>
+                <input type="password" id="ai-key" placeholder="gsk_...">
+                <button class="btn-secondary full-width" onclick="saveAiSettings()" style="margin-top:10px;">Salva Configurazione AI</button>
+            </div>
+
             <hr style="border:0; border-top:1px dashed var(--border); margin: 20px 0;">
             <p style="font-size:0.9rem; color:var(--text-light)">Gestione Dati</p>
             <div class="col" style="display:flex; flex-direction:column; gap:10px;">

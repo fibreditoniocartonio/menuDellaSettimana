@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (authToken) {
         showView('view-dashboard');
         document.getElementById('navbar').classList.remove('hidden');
+        loadAiSettings(); // Carica settings AI all'avvio
     } else {
         showView('view-login');
     }
@@ -78,7 +79,7 @@ async function applyTheme() {
         }
 
         // Caricamento casuale dello sfondo
-        urlBgImage = "";
+        let urlBgImage = "";
         try {
             const res = await fetch(`/api/background/${themeName}`);
             if (res.ok) {
@@ -285,6 +286,7 @@ async function login() {
         const data = await res.json();
         authToken = `Bearer ${data.token}`; localStorage.setItem('familyMenuToken', authToken);
         document.getElementById('navbar').classList.remove('hidden'); showView('view-dashboard');
+        loadAiSettings();
     } else document.getElementById('login-error').innerText = "Codice errato";
 }
 function logout() { localStorage.removeItem('familyMenuToken'); authToken = null; location.reload(); }
@@ -294,6 +296,29 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     const res = await fetch(`${API_URL}${endpoint}`, {method, headers, body: body ? JSON.stringify(body) : null});
     if (res.status === 401) logout();
     return res;
+}
+
+// --- SETTINGS AI ---
+async function loadAiSettings() {
+    try {
+        const res = await apiCall('/settings');
+        if (res.ok) {
+            const data = await res.json();
+            document.getElementById('ai-endpoint').value = data.llm_api_url || '';
+            document.getElementById('ai-key').value = data.llm_api_key || '';
+        }
+    } catch(e) { console.error(e); }
+}
+
+async function saveAiSettings() {
+    const url = document.getElementById('ai-endpoint').value;
+    const key = document.getElementById('ai-key').value;
+    const res = await apiCall('/settings', 'POST', { llm_api_url: url, llm_api_key: key });
+    if (res.ok) {
+        await showAlert("Impostazioni AI salvate!");
+    } else {
+        await showAlert("Errore salvataggio impostazioni.");
+    }
 }
 
 // --- RICETTE ---
@@ -364,6 +389,9 @@ function openRecipeModal(recipe = null) {
     btnSave.style.display = 'none';
     btnDel.style.display = 'none';
 
+    // Gestione checkbox stagioni
+    const seasonCbs = document.querySelectorAll('.season-cb');
+
     if (recipe) {
         document.getElementById('modal-title').innerText = "Dettagli Ricetta";
         document.getElementById('rec-id').value = recipe.id;
@@ -373,6 +401,13 @@ function openRecipeModal(recipe = null) {
         document.getElementById('rec-difficulty').value = recipe.difficulty || 1;
         ta.value = recipe.procedure || "";
         recipe.ingredients.forEach(ing => addIngredientRow(ing.name, ing.quantity));
+
+        // Popola stagioni
+        const savedSeasons = recipe.seasons || ["inverno","primavera","estate","autunno"];
+        seasonCbs.forEach(cb => {
+            cb.checked = savedSeasons.includes(cb.value);
+        });
+
     } else {
         document.getElementById('modal-title').innerText = "Nuova Ricetta";
         document.getElementById('rec-id').value = '';
@@ -381,6 +416,10 @@ function openRecipeModal(recipe = null) {
         document.getElementById('rec-difficulty').value = 1;
         ta.value = "";
         addIngredientRow();
+
+        // Default: tutte le stagioni selezionate
+        seasonCbs.forEach(cb => cb.checked = true);
+
         toggleEditMode();
     }
 
@@ -410,15 +449,22 @@ function addIngredientRow(name = '', qty = '') {
     document.getElementById('ingredients-list').appendChild(div);
 }
 function closeRecipeModal() { document.getElementById('recipe-modal').classList.add('hidden'); }
+
 async function saveRecipe() {
     const id = document.getElementById('rec-id').value;
+
+    // Raccogli stagioni
+    const selectedSeasons = [];
+    document.querySelectorAll('.season-cb:checked').forEach(cb => selectedSeasons.push(cb.value));
+
     const body = {
         name: document.getElementById('rec-name').value,
         type: document.getElementById('rec-type').value,
         servings: document.getElementById('rec-servings').value,
         difficulty: document.getElementById('rec-difficulty').value,
         procedure: document.getElementById('rec-procedure').value,
-        ingredients: []
+        ingredients: [],
+        seasons: selectedSeasons
     };
     document.querySelectorAll('.ingredient-row').forEach(row => {
         const n = row.querySelector('.ing-name').value;
@@ -456,11 +502,26 @@ async function loadLastMenu() {
 async function generateMenu() {
     const people = document.getElementById('gen-people').value;
     document.getElementById('generate-modal').classList.add('hidden');
-    const res = await apiCall('/generate-menu', 'POST', { people });
-    if(res.ok) {
-        isMenuLoaded = true;
-        renderMenuData(await res.json());
-    } else { const err = await res.json(); await showAlert(err.error); }
+
+    // Mostra loading o feedback
+    const btn = document.querySelector('.card-action[onclick="showGenerateModal()"] p');
+    const originalText = btn.innerText;
+    btn.innerText = "Generazione in corso...";
+
+    try {
+        const res = await apiCall('/generate-menu', 'POST', { people });
+        if(res.ok) {
+            isMenuLoaded = true;
+            renderMenuData(await res.json());
+        } else {
+            const err = await res.json();
+            await showAlert(err.error);
+        }
+    } catch(e) {
+        await showAlert("Errore di connessione.");
+    } finally {
+        btn.innerText = originalText;
+    }
 }
 
 function getEmojiForType(type) {
@@ -582,8 +643,12 @@ function renderMenuData(data) {
 function renderShoppingList(data) {
     const container = document.getElementById('shopping-container');
     const mainList = data.shoppingList.main || {};
+    const categories = data.shoppingList.categories; // Se esiste, è la lista categorizzata
     const extras = data.shoppingExtras || [];
+
     let html = `<div class="shopping-toolbar"><button class="btn-small btn-secondary" onclick="addExtraItem()">+ Aggiungi</button></div>`;
+
+    // Lista Extra Manuali
     if (extras.length > 0) {
         html += `<div class="shopping-section-title">✨ Extra Aggiunti</div><ul class="checklist">`;
         extras.forEach(item => {
@@ -591,24 +656,64 @@ function renderShoppingList(data) {
         });
         html += `</ul><div style="text-align:right; margin-top:5px;"><button class="btn-text" style="color:var(--accent); font-size:0.8rem;" onclick="clearManualList()">🗑 Svuota lista manuale</button></div>`;
     }
-    const renderGroup = (listObj, cat) => {
-        if(Object.keys(listObj).length === 0) return '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
-        let s = '';
-        Object.keys(listObj).forEach(k => {
-            const i = listObj[k];
-            const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
-            const rowId = `${cat}-${safeKey}`;
 
-            let infoBtn = '';
-            if (i.usages && i.usages.length > 0) {
-                infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
-            }
+    html += `<div class="shopping-section-title">🛒 Lista della Spesa <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica">⟲</button></div>`;
 
-            s += `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('${cat}', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area">${infoBtn}<span onclick="editShoppingQty('${cat}', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</span></div></li>`;
-        });
-        return s;
+    // Funzione helper per renderizzare un singolo item
+    const renderItem = (k, listObj) => {
+        const i = listObj[k];
+        const safeKey = k.replace(/[^a-zA-Z0-9]/g, '_');
+        const rowId = `main-${safeKey}`; // ID coerente sempre 'main' per coerenza DB
+
+        let infoBtn = '';
+        if (i.usages && i.usages.length > 0) {
+            infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="Vedi Ricette">📖</button>`;
+        }
+        return `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('main', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area">${infoBtn}<span onclick="editShoppingQty('main', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</span></div></li>`;
     };
-    html += `<div class="shopping-section-title">🛒 Lista della Spesa <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica">⟲</button></div><ul class="checklist">${renderGroup(mainList, 'main')}</ul>`;
+
+    // RENDER LOGIC: CATEGORIZED vs FLAT
+    if (categories && Object.keys(categories).length > 0) {
+        // Visualizzazione Categorizzata
+        Object.keys(categories).forEach(catName => {
+            const itemsInCat = categories[catName];
+            if (itemsInCat && itemsInCat.length > 0) {
+                // Filtra solo quelli che esistono effettivamente in mainList (per sicurezza)
+                const validItems = itemsInCat.filter(name => mainList[name]);
+                if (validItems.length > 0) {
+                    html += `<div class="shopping-category-header">${catName}</div><ul class="checklist">`;
+                    validItems.forEach(itemName => {
+                        html += renderItem(itemName, mainList);
+                    });
+                    html += `</ul>`;
+                }
+            }
+        });
+
+        // Gestione "Altro" o item non categorizzati
+        const allCategorizedItems = Object.values(categories).flat();
+        const remainingItems = Object.keys(mainList).filter(k => !allCategorizedItems.includes(k));
+        if (remainingItems.length > 0) {
+            html += `<div class="shopping-category-header">Altro / Non Categorizzato</div><ul class="checklist">`;
+            remainingItems.forEach(itemName => {
+                html += renderItem(itemName, mainList);
+            });
+            html += `</ul>`;
+        }
+
+    } else {
+        // Visualizzazione Classica (Flat)
+        if(Object.keys(mainList).length === 0) {
+            html += '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
+        } else {
+            html += `<ul class="checklist">`;
+            Object.keys(mainList).forEach(k => {
+                html += renderItem(k, mainList);
+            });
+            html += `</ul>`;
+        }
+    }
+
     container.innerHTML = html;
 }
 
@@ -647,7 +752,7 @@ function toggleShoppingItem(cat, item, isExtra, domEl) {
         const extraItem = currentMenuData.shoppingExtras.find(x => x.name === item);
         if (extraItem) extraItem.checked = isNowChecked;
     } else {
-        if (currentMenuData.shoppingList[cat][item]) currentMenuData.shoppingList[cat][item].checked = isNowChecked;
+        if (currentMenuData.shoppingList.main[item]) currentMenuData.shoppingList.main[item].checked = isNowChecked;
     }
     apiCall('/toggle-shopping-item', 'POST', { category: cat, item, isExtra }).then(res => {
         if(!res.ok) { if(isNowChecked) { li.classList.remove('checked'); icon.innerText=''; } else { li.classList.add('checked'); icon.innerText='✔'; } }
@@ -1125,3 +1230,4 @@ async function importJSON(el) {
     };
     reader.readAsText(file);
 }
+
