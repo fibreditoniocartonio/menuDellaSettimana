@@ -791,7 +791,7 @@ function renderShoppingList(data) {
 
     // Stili inline per il layout dell'header della spesa
     const headerHtml = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
     <div class="shopping-section-title" style="margin:0; display:flex; align-items:center; gap:10px;">
     🛒 Lista della Spesa
     <button class="btn-refresh" onclick="loadLastMenu()" title="Ricarica" style="font-size:1.2rem; cursor:pointer;">⟲</button>
@@ -812,8 +812,6 @@ function renderShoppingList(data) {
         const rowId = `main-${safeKey}`;
         const itemIcon = i.isManual ? '✍️' : '📖';
         const itemTitle = i.isManual ? 'Modifica Manuale' : 'Vedi Ricette';
-
-        // Icona: Libro per tutti (ora anche manuali hanno dettagli/modifica)
         let infoBtn = `<button class="btn-info" onclick="showIngredientDetails('${k.replace(/'/g, "\\'")}')" title="${itemTitle}">${itemIcon}</button>`;
 
         return `<li class="${i.checked ? 'checked' : ''}" id="${rowId}"><div class="check-area" onclick="toggleShoppingItem('main', '${k.replace(/'/g, "\\'")}', false, this)"><span class="check-icon">${i.checked ? '✔' : ''}</span><span>${k}</span></div><div class="qty-area">${infoBtn}<span onclick="editShoppingQty('main', '${k.replace(/'/g, "\\'")}', '${i.qty}')"><b class="${i.isModified ? 'modified-qty' : ''}">${i.qty}</b>${i.isModified ? '<span class="edit-dot">●</span>' : ''}</span></div></li>`;
@@ -823,7 +821,9 @@ function renderShoppingList(data) {
     if (hasCategories) {
         const sortedCategories = Object.keys(categories).sort();
 
+        // 1. Renderizziamo tutte le categorie TRANNE "Altro"
         sortedCategories.forEach(catName => {
+            if (catName === 'Altro') return; // SALTIAMO "Altro" qui, lo gestiamo in fondo
             const itemsInCat = categories[catName];
             if (itemsInCat && itemsInCat.length > 0) {
                 const validItems = itemsInCat.filter(name => mainList[name]);
@@ -841,7 +841,8 @@ function renderShoppingList(data) {
                     if (!isOpen) ul.classList.add('hidden');
 
                     header.innerText = `${catName} ${isOpen ? '-' : '+'}`;
-
+                    
+                    // Gestione click espandi/collassa
                     header.onclick = () => {
                         if (ul.classList.contains('hidden')) {
                             ul.classList.remove('hidden');
@@ -852,8 +853,6 @@ function renderShoppingList(data) {
                             header.innerText = `${catName} +`;
                             openShoppingCategories.delete(catName);
                         }
-                        // Aggiorna bottone espandi/chiudi
-                        renderShoppingList(currentMenuData);
                     };
 
                     let innerHtml = '';
@@ -868,12 +867,15 @@ function renderShoppingList(data) {
                 }
             }
         });
+        const allCategorizedItems = new Set();
+        Object.keys(categories).forEach(c => {
+            if (c !== 'Altro') {
+                categories[c].forEach(item => allCategorizedItems.add(item));
+            }
+        });
+        const itemsForAltro = Object.keys(mainList).filter(k => !allCategorizedItems.has(k));
 
-        // "Altro" / Non categorizzati
-        const allCategorizedItems = Object.values(categories).flat();
-        const remainingItems = Object.keys(mainList).filter(k => !allCategorizedItems.includes(k));
-
-        if (remainingItems.length > 0) {
+        if (itemsForAltro.length > 0) {
             const catName = "Altro";
             const catContainer = document.createElement('div');
             const header = document.createElement('div');
@@ -902,7 +904,7 @@ function renderShoppingList(data) {
             };
 
             let innerHtml = '';
-            remainingItems.sort().forEach(itemName => {
+            itemsForAltro.sort().forEach(itemName => {
                 innerHtml += renderItem(itemName, mainList);
             });
             ul.innerHTML = innerHtml;
@@ -913,16 +915,65 @@ function renderShoppingList(data) {
         }
 
     } else {
-        // Visualizzazione Classica (Flat)
+        // Visualizzazione Classica (Flat - Ordine Alfabetico)
         if(Object.keys(mainList).length === 0) {
-            container.innerHTML += '<p style="color:var(--text-light); padding:10px;">Vuoto.</p>';
+            container.innerHTML += '<p style="color:var(--text-light); padding:10px; margin: 0px;">Vuoto.</p>';
         } else {
-            let innerHtml = `<ul class="checklist">`;
+            let innerHtml = ``;
+
+            // Controlliamo se l'input della chiave API (caricato all'avvio) ha un valore
+            const aiUrlInput = document.getElementById('ai-endpoint');
+            const aiKeyInput = document.getElementById('ai-key');
+            if (aiKeyInput && aiKeyInput.value.trim() !== "" && aiUrlInput && aiUrlInput.value.trim() !== "") {
+                innerHtml += `
+                <div style="padding: 10px 0;">
+                    <button class="btn-secondary full-width" style="background: var(--accent); color: white;" onclick="organizeShoppingListWithAI()">
+                        ✨ Ordina per reparti con AI
+                    </button>
+                </div>`;
+            }            
+
+            innerHtml += `<ul class="checklist" style="margin-top: 5px;">`;
             Object.keys(mainList).sort().forEach(k => {
                 innerHtml += renderItem(k, mainList);
             });
             innerHtml += `</ul>`;
+
+
+
             container.innerHTML += innerHtml;
+        }
+    }
+}
+
+async function organizeShoppingListWithAI() {
+    // Feedback visivo immediato
+    const btn = document.querySelector('button[onclick="organizeShoppingListWithAI()"]');
+    if(btn) {
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Sto organizzando gli scaffali...";
+    }
+
+    try {
+        const res = await apiCall('/organize-shopping-list', 'POST');
+        if (res.ok) {
+            const data = await res.json();
+            renderMenuData(data); // Ricarica la vista (ora mostrerà le categorie)
+        } else {
+            const err = await res.json();
+            await showAlert("Errore AI: " + (err.error || "Sconosciuto"));
+            if(btn) {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        }
+    } catch (e) {
+        console.error(e);
+        await showAlert("Errore di comunicazione con il server.");
+        if(btn) {
+            btn.disabled = false;
+            btn.innerText = "Riprova";
         }
     }
 }
@@ -1018,7 +1069,8 @@ function showIngredientDetails(itemKey) {
 // Funzione per toggle expand/collapse
 function toggleAllCategories() {
     const categories = currentMenuData.shoppingList.categories || {};
-    const allCatKeys = Object.keys(categories);
+    let allCatKeys = Object.keys(categories);
+    allCatKeys.push('Altro'); //aggiungo Altro perchè è gestita dinamicamente
     if(allCatKeys.length === 0) return;
 
     const allOpen = allCatKeys.every(k => openShoppingCategories.has(k));

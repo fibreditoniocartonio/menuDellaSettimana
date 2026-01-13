@@ -420,20 +420,6 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
         });
     }
 
-    // Se non ci sono categorie (prima volta), proviamo AI
-    // Nota: L'AI viene chiamata solo alla generazione del menu o se forzato,
-    // qui manteniamo le categorie esistenti per velocità negli update parziali.
-    const settings = await new Promise(resolve => {
-        db.get("SELECT * FROM settings WHERE id = 1", (err, row) => resolve(row));
-    });
-
-    if (!categories && settings && settings.llm_api_key) {
-        const aiGroups = await categorizeWithLLM(mainList, settings);
-        if (aiGroups) {
-            categories = aiGroups;
-        }
-    }
-
     // Se le categorie sono attive (generate ora da IA o ereditate)
     if (categories && Object.keys(categories).length > 0) {
         // Creiamo un Set di tutti gli item già categorizzati per ricerca veloce
@@ -469,6 +455,33 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
         shoppingExtras: manualExtras // Manteniamo l'array raw per poterlo salvare nel DB
     };
 }
+
+app.post('/api/organize-shopping-list', checkAuth, (req, res) => {
+    db.get("SELECT data FROM menu_state WHERE id = 1", async (err, row) => {
+        if (!row || !row.data) return res.status(400).json({ error: "Nessun menu attivo" });
+        
+        let s = JSON.parse(row.data);
+        
+        const mainList = s.shoppingList.main; 
+
+        const settings = await new Promise(resolve => {
+            db.get("SELECT * FROM settings WHERE id = 1", (err, row) => resolve(row));
+        });
+
+        if (!settings || !settings.llm_api_key) {
+            return res.status(400).json({ error: "API Key AI non configurata nelle opzioni." });
+        }
+
+        const aiGroups = await categorizeWithLLM(mainList, settings);
+        
+        if (aiGroups) {
+            s.shoppingList.categories = aiGroups;
+            await saveState(res, s);
+        } else {
+            res.status(500).json({ error: "L'AI non ha restituito una risposta valida." });
+        }
+    });
+});
 
 // --- ROTTE PUBLIC ---
 app.get('/api/background/:theme', (req, res) => {
