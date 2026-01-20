@@ -297,53 +297,54 @@ const processRecipeForShopping = (recipeOrMeal, listCombinedRaw, people, context
     }
 };
 
-async function calculateShoppingList(menu, dessert, extraMeals, people, dessertPeople, oldState = {}) {
+async function calculateShoppingList(menu, dessert, extraMeals, lunchPeople, dinnerPeople, dessertPeople, oldState = {}) {
     const oldMain = oldState.shoppingList ? (oldState.shoppingList.main || {}) : {};
     const overrides = oldState.shoppingOverrides || {};
-    // Recuperiamo gli extra manuali salvati
     const manualExtras = oldState.shoppingExtras || [];
 
     const listCombinedRaw = {};
 
     // 1. Processo Ricette Menu
-    menu.forEach(day => {
-        ['lunch', 'dinner'].forEach(slot => {
-            const context = `Giorno ${day.day} (${slot === 'lunch' ? 'Pranzo' : 'Cena'})`;
-            processRecipeForShopping(day[slot], listCombinedRaw, people, context);
+    if (menu && Array.isArray(menu)) {
+        menu.forEach(day => {
+            // PRANZO: Usa lunchPeople
+            if (day.lunch) {
+                const context = `${day.dateFormatted || 'Giorno ' + day.day} (Pranzo)`;
+                processRecipeForShopping(day.lunch, listCombinedRaw, lunchPeople, context);
+            }
+            // CENA: Usa dinnerPeople
+            if (day.dinner) {
+                const context = `${day.dateFormatted || 'Giorno ' + day.day} (Cena)`;
+                processRecipeForShopping(day.dinner, listCombinedRaw, dinnerPeople, context);
+            }
         });
-    });
+    }
 
-    // 2. Processo Pasti Extra (Ricette complete aggiunte a mano)
+    // 2. Processo Pasti Extra (Defaultiamo a dinnerPeople se non specificato, o custom)
     if (extraMeals && Array.isArray(extraMeals)) {
         extraMeals.forEach(meal => {
-            processRecipeForShopping(meal, listCombinedRaw, meal.customServings || people, "Extra");
+            // Se è extra manuale, usiamo il suo customServings o fallback a una media (es. dinnerPeople)
+            processRecipeForShopping(meal, listCombinedRaw, meal.customServings || dinnerPeople, "Extra");
         });
     }
 
     // 3. Processo Dolce
     if(dessert) {
-        const dRatio = (dessertPeople || people) / dessert.servings;
+        // Fallback per dessertPeople se null
+        const peopleForDessert = dessertPeople || dinnerPeople || 2;
+        const dRatio = peopleForDessert / dessert.servings;
         const ingredients = typeof dessert.ingredients === 'string' ? JSON.parse(dessert.ingredients) : dessert.ingredients;
         ingredients.forEach(ing => {
             updateShoppingItem(listCombinedRaw, ing.name, ing.quantity, dRatio, "Dolce", dessert.name);
         });
     }
 
-    // 4. MERGE DEGLI EXTRA MANUALI NELLA LISTA PRINCIPALE
-    // Qui soddisfiamo la richiesta di "non fare l'area a parte"
+    // 4. MERGE DEGLI EXTRA MANUALI
     if (manualExtras && Array.isArray(manualExtras)) {
         manualExtras.forEach(item => {
-            // updateShoppingItem gestisce la somma se esiste già
             updateShoppingItem(
-                listCombinedRaw,
-                item.name,
-                item.qty,
-                1,
-                "Manuale",
-                "Aggiunto a mano",
-                true, // isManual
-                item.id, // ID univoco per cancellazione
-                item.category // Passiamo la categoria se c'è
+                listCombinedRaw, item.name, item.qty, 1,
+                "Manuale", "Aggiunto a mano", true, item.id, item.category
             );
         });
     }
@@ -382,8 +383,8 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
                 qty: displayQty,
                 checked: isChecked,
                 isModified: hasOverride,
-                isManual: item.isManual, // Passiamo info al frontend
-                extraId: item.extraId,   // Passiamo ID al frontend
+                isManual: item.isManual,
+                extraId: item.extraId,
                 categoryHint: item.categoryHint,
                 usages: item.usages
             };
@@ -393,25 +394,15 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
 
     const mainList = formatList(listCombinedRaw, oldMain, 'main');
 
-    // Gestione Categorie
     let categories = null;
-
-    // Se ci sono categorie vecchie, cerchiamo di preservarle o aggiornarle con i nuovi manuali
     if (oldState.shoppingList && oldState.shoppingList.categories) {
         categories = oldState.shoppingList.categories;
-
-        // Se un item manuale ha una categoria specificata ed è nuovo, aggiungiamolo
         Object.keys(mainList).forEach(itemName => {
             const item = mainList[itemName];
             if (item.isManual && item.categoryHint) {
-                // Rimuovi da altre categorie se presente (spostamento)
                 Object.keys(categories).forEach(c => {
-                    if(categories[c].includes(itemName)) {
-                        // Non facciamo nulla se è già lì, altrimenti rimuoviamo?
-                        // Per semplicità: l'ultima categoria vince se specificata manualmente
-                    }
+                    if(categories[c].includes(itemName)) { }
                 });
-
                 if (!categories[item.categoryHint]) categories[item.categoryHint] = [];
                 if (!categories[item.categoryHint].includes(itemName)) {
                     categories[item.categoryHint].push(itemName);
@@ -420,29 +411,16 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
         });
     }
 
-    // Se le categorie sono attive (generate ora da IA o ereditate)
     if (categories && Object.keys(categories).length > 0) {
-        // Creiamo un Set di tutti gli item già categorizzati per ricerca veloce
         const categorizedItems = new Set(Object.values(categories).flat());
-
         Object.keys(mainList).forEach(itemName => {
             const item = mainList[itemName];
-
-            // Se è un item MANUALE e NON si trova in nessuna categoria
             if (item.isManual && !categorizedItems.has(itemName)) {
-                // Assicuriamoci che esista la categoria "Altro"
                 if (!categories["Altro"]) categories["Altro"] = [];
-
-                // Aggiungiamolo se non c'è già
                 if (!categories["Altro"].includes(itemName)) {
                     categories["Altro"].push(itemName);
                 }
-
-                // Aggiorniamo anche l'hint nell'item per coerenza futura
                 item.categoryHint = "Altro";
-
-                // Aggiorniamo anche l'array raw manualExtras per persistenza nel DB
-                // (così al prossimo giro ha già la categoria salvata)
                 const rawExtra = manualExtras.find(e => toTitleCase(e.name) === itemName);
                 if (rawExtra) rawExtra.category = "Altro";
             }
@@ -452,7 +430,7 @@ async function calculateShoppingList(menu, dessert, extraMeals, people, dessertP
     return {
         shoppingList: { main: mainList, categories: categories },
         shoppingOverrides: overrides,
-        shoppingExtras: manualExtras // Manteniamo l'array raw per poterlo salvare nel DB
+        shoppingExtras: manualExtras
     };
 }
 
@@ -580,7 +558,8 @@ app.delete('/api/recipes/:id', checkAuth, (req, res) => {
 // --- ROTTE MENU ---
 
 app.post('/api/generate-menu', checkAuth, (req, res) => {
-    const { people } = req.body;
+    // MODIFICA: Nuovi parametri dal body
+    const { startDate, endDate, lunchPeople, dinnerPeople, includeDessert } = req.body;
     const currentSeason = getCurrentSeason();
 
     db.get("SELECT data FROM menu_state WHERE id = 1", (errState, rowState) => {
@@ -601,31 +580,47 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
             const allRecipes = rows.map(r => ({
                 ...r,
                 ingredients: JSON.parse(r.ingredients),
-                                              seasons: r.seasons ? JSON.parse(r.seasons) : ["inverno","primavera","estate","autunno"]
+                seasons: r.seasons ? JSON.parse(r.seasons) : ["inverno","primavera","estate","autunno"]
             })).filter(r => r.seasons.includes(currentSeason));
 
             if (allRecipes.length < 2) return res.status(400).json({ error: `Poche ricette per la stagione corrente (${currentSeason})!` });
 
+            // Categorizzazione
             const primiSemplici = allRecipes.filter(r => r.type === 'primo');
             const primiCompleti = allRecipes.filter(r => r.type === 'primo_completo');
             const sughi = allRecipes.filter(r => r.type === 'sugo');
-
             const secondi = allRecipes.filter(r => r.type === 'secondo');
             const contorni = allRecipes.filter(r => r.type === 'contorno');
             const secondiCompleti = allRecipes.filter(r => r.type === 'secondo_completo');
-
             const dolci = allRecipes.filter(r => r.type === 'dolce');
 
-            const weekMenu = [];
+            const menu = [];
             const usedIds = new Set();
 
-            for (let i = 0; i < 7; i++) {
-                const dayMenu = { day: i + 1, lunch: null, dinner: null };
+            // MODIFICA: Calcolo date
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            // Loop giorno per giorno
+            for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                // Formatta data per display (in italiano) e ISO per logica
+                const dateIso = d.toISOString().split('T')[0];
+                const opts = { weekday: 'long', year: 'numeric', month: '2-digit', day: '2-digit' };
+                const dateFormatted = d.toLocaleDateString('it-IT', opts); // es: "martedì 20/01/2026"
+                const titleCaseDate = dateFormatted.charAt(0).toUpperCase() + dateFormatted.slice(1);
+
+                const dayMenu = { 
+                    day: menu.length + 1, // Progressivo interno
+                    dateIso: dateIso,
+                    dateFormatted: titleCaseDate,
+                    lunch: null, 
+                    dinner: null 
+                };
 
                 // --- PRANZO ---
                 const useCompleteLunch = (Math.random() > 0.6 && primiCompleti.length > 0) || (primiSemplici.length === 0);
                 if (useCompleteLunch) {
-                    dayMenu.lunch = getWeightedRandom(primiCompleti, usedIds);
+                    const r = getWeightedRandom(primiCompleti, usedIds);
+                    if(r) dayMenu.lunch = {...r, customServings: parseInt(lunchPeople)};
                 } else {
                     const p = getWeightedRandom(primiSemplici, usedIds);
                     const s = getWeightedRandom(sughi, usedIds);
@@ -635,10 +630,11 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
                                 isComposite: true,
                                 name: `${p.name} al ${s.name}`,
                                 items: [p, s],
-                                difficulty: Math.max(p.difficulty, s.difficulty)
+                                difficulty: Math.max(p.difficulty, s.difficulty),
+                                customServings: parseInt(lunchPeople)
                             };
                         } else {
-                            dayMenu.lunch = p;
+                            dayMenu.lunch = {...p, customServings: parseInt(lunchPeople)};
                         }
                     }
                 }
@@ -646,7 +642,8 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
                 // --- CENA ---
                 const useCompleteDinner = (Math.random() > 0.5 && secondiCompleti.length > 0) || (secondi.length === 0);
                 if (useCompleteDinner && secondiCompleti.length > 0) {
-                    dayMenu.dinner = getWeightedRandom(secondiCompleti, usedIds);
+                    const r = getWeightedRandom(secondiCompleti, usedIds);
+                    if(r) dayMenu.dinner = {...r, customServings: parseInt(dinnerPeople)};
                 } else {
                     const sec = getWeightedRandom(secondi, usedIds);
                     const cont = getWeightedRandom(contorni, usedIds);
@@ -656,36 +653,43 @@ app.post('/api/generate-menu', checkAuth, (req, res) => {
                                 isComposite: true,
                                 name: `${sec.name} + ${cont.name}`,
                                 items: [sec, cont],
-                                difficulty: Math.max(sec.difficulty, cont.difficulty)
+                                difficulty: Math.max(sec.difficulty, cont.difficulty),
+                                customServings: parseInt(dinnerPeople)
                             };
                         } else {
-                            dayMenu.dinner = sec;
+                            dayMenu.dinner = {...sec, customServings: parseInt(dinnerPeople)};
                         }
-                    } else {
-                        dayMenu.dinner = null;
                     }
                 }
-                weekMenu.push(dayMenu);
+                menu.push(dayMenu);
             }
 
-            const selectedDessert = getWeightedRandom(dolci, new Set());
-            const dessertPeople = people;
+            // MODIFICA: Logica Dolce (se richiesto)
+            let selectedDessert = null;
+            if (includeDessert) {
+                selectedDessert = getWeightedRandom(dolci, new Set());
+            }
+            
+            const dessertPeople = parseInt(dinnerPeople); // Default dessert = cena
             const extraMeals = [];
-
             const tempState = { shoppingExtras: preservedExtras, shoppingOverrides: {} };
 
-            // Calcolo lista spesa (include chiamata AI)
-            const calculated = await calculateShoppingList(weekMenu, selectedDessert, extraMeals, people, dessertPeople, tempState);
+            // Calcolo lista spesa con i nuovi parametri
+            const calculated = await calculateShoppingList(menu, selectedDessert, extraMeals, parseInt(lunchPeople), parseInt(dinnerPeople), dessertPeople, tempState);
 
             const stateData = {
-                menu: weekMenu,
+                menu: menu,
                 extraMeals: extraMeals,
                 shoppingList: calculated.shoppingList,
                 shoppingOverrides: calculated.shoppingOverrides,
                 shoppingExtras: calculated.shoppingExtras,
                 dessert: selectedDessert,
-                people,
-                dessertPeople
+                lunchPeople: parseInt(lunchPeople),
+                dinnerPeople: parseInt(dinnerPeople),
+                people: parseInt(dinnerPeople), // Fallback legacy
+                dessertPeople,
+                startDate,
+                endDate
             };
 
             db.run(`INSERT OR REPLACE INTO menu_state (id, data) VALUES (1, ?)`, [JSON.stringify(stateData)], (e) => {
@@ -710,11 +714,15 @@ app.get('/api/last-menu', checkAuth, (req, res) => {
 
 // --- GESTIONE SPESA ---
 const saveState = async (res, newState) => {
+    const lunchP = newState.lunchPeople || newState.people || 2;
+    const dinnerP = newState.dinnerPeople || newState.people || 2;
+    
     const recalculated = await calculateShoppingList(
         newState.menu,
         newState.dessert,
         newState.extraMeals,
-        newState.people,
+        lunchP,
+        dinnerP,
         newState.dessertPeople,
         newState
     );

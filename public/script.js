@@ -586,19 +586,23 @@ async function deleteCurrentRecipe() {
 
 // --- MENU & DASHBOARD ---
 function showGenerateModal() {
-    // Reset del contenuto del modale nel caso sia stato modificato da una generazione precedente
-    const modalContent = document.querySelector('#generate-modal .modal-content');
-    modalContent.innerHTML = `
-    <h3 class="text-center">Genera Menu</h3>
-    <p class="text-center" style="color:var(--text-light)">Per quante persone cucini solitamente?</p>
-    <div style="text-align:center; margin: 20px 0;">
-    <input type="number" id="gen-people" value="2" style="color: var(--text); font-size: 2rem; text-align: center; width: 100px; border:none; border-bottom: 2px solid var(--accent); background: transparent; border-radius:0;">
-    </div>
-    <div class="modal-footer" style="justify-content: center;">
-    <button class="btn-secondary" onclick="document.getElementById('generate-modal').classList.add('hidden')">Annulla</button>
-    <button class="btn-primary" onclick="generateMenu()">Genera Ora!</button>
-    </div>
-    `;
+    const today = new Date();
+    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+    const nextWeek = new Date(tomorrow); nextWeek.setDate(tomorrow.getDate() + 6); // 7 giorni tot
+
+    const fmt = (d) => d.toISOString().split('T')[0];
+
+    document.getElementById('gen-start').value = fmt(tomorrow);
+    document.getElementById('gen-end').value = fmt(nextWeek);
+    
+    if(currentMenuData) {
+        document.getElementById('gen-lunch-people').value = currentMenuData.lunchPeople || 2;
+        document.getElementById('gen-dinner-people').value = currentMenuData.dinnerPeople || 2;
+    } else {
+        document.getElementById('gen-lunch-people').value = 2;
+        document.getElementById('gen-dinner-people').value = 2;
+    }
+
     document.getElementById('generate-modal').classList.remove('hidden');
 }
 
@@ -615,32 +619,49 @@ async function loadLastMenu() {
 }
 
 async function generateMenu() {
-    const people = document.getElementById('gen-people').value;
+    const startDate = document.getElementById('gen-start').value;
+    const endDate = document.getElementById('gen-end').value;
+    const lunchPeople = document.getElementById('gen-lunch-people').value;
+    const dinnerPeople = document.getElementById('gen-dinner-people').value;
+    const includeDessert = document.getElementById('gen-dessert').checked;
+
+    if(!startDate || !endDate) {
+        await showAlert("Seleziona le date.");
+        return;
+    }
 
     // UI Loading state
     const modalContent = document.querySelector('#generate-modal .modal-content');
+    const originalContent = modalContent.innerHTML; // Salva per ripristino se errore
     modalContent.innerHTML = `
     <h3 class="text-center">Genera Menu</h3>
     <div style="text-align:center; margin: 30px 0;">
     <div style="font-size:2rem; animation: spin 1s linear infinite; display:inline-block;">⌛</div>
     <p>Generazione in corso...</p>
-    <p style="font-size:0.8rem; color:var(--text-light)">L'AI sta organizzando la spesa</p>
     </div>
     `;
 
     try {
-        const res = await apiCall('/generate-menu', 'POST', { people });
+        const res = await apiCall('/generate-menu', 'POST', { 
+            startDate, endDate, lunchPeople, dinnerPeople, includeDessert 
+        });
+        
         if(res.ok) {
             isMenuLoaded = true;
             renderMenuData(await res.json());
             document.getElementById('generate-modal').classList.add('hidden');
+            // Ripristina modale originale (ricaricando la pagina o ricostruendo HTML, 
+            // ma qui nascondiamo e basta, showGenerateModal lo resetterà valori)
+            setTimeout(() => { modalContent.innerHTML = originalContent; }, 500); 
         } else {
             const err = await res.json();
             document.getElementById('generate-modal').classList.add('hidden');
+            modalContent.innerHTML = originalContent; // Ripristina UI
             await showAlert(err.error);
         }
     } catch(e) {
         document.getElementById('generate-modal').classList.add('hidden');
+        modalContent.innerHTML = originalContent;
         await showAlert("Errore di connessione.");
     }
 }
@@ -691,17 +712,27 @@ function renderMealControl(day, type, meal, defaultPeople, isExtra = false) {
 function openRecipeDetails(day, type, extraId = null) {
     if(!currentMenuData) return;
     let meal, currentServings;
+    
+    // Definisci i default corretti
+    const lPeople = currentMenuData.lunchPeople || currentMenuData.people || 2;
+    const dPeople = currentMenuData.dinnerPeople || currentMenuData.people || 2;
+
     if (type === 'dessert') {
         meal = currentMenuData.dessert;
-        currentServings = currentMenuData.dessertPeople || currentMenuData.people;
+        currentServings = currentMenuData.dessertPeople || dPeople;
     } else if (extraId) {
         meal = currentMenuData.extraMeals.find(e => e.uniqueId == extraId);
-        currentServings = meal.customServings || currentMenuData.people;
+        currentServings = meal.customServings || dPeople;
     } else {
         const dayData = currentMenuData.menu.find(d => d.day === day);
         if(dayData) meal = dayData[type];
-        currentServings = meal.customServings || currentMenuData.people;
+        
+        // Se non ha custom servings, usa il default appropriato per il tipo di pasto
+        if(meal) {
+             currentServings = meal.customServings || (type === 'lunch' ? lPeople : dPeople);
+        }
     }
+    
     if(!meal) return;
     let htmlContent = '';
     const items = (meal.items && Array.isArray(meal.items)) ? meal.items : [meal];
@@ -721,7 +752,7 @@ function openRecipeDetails(day, type, extraId = null) {
         htmlContent += `<p style="font-size:0.9rem; margin-top:5px;"><b>Procedimento:</b></p><div style="font-size:0.9rem; padding:10px; border: 1px solid; border-radius:8px;">${proc}</div>`;
         if (idx < items.length - 1) htmlContent += '<hr>';
     });
-        showCustomDialog(meal.name || "Dettagli Piatto", htmlContent, 'alert');
+    showCustomDialog(meal.name || "Dettagli Piatto", htmlContent, 'alert');
 }
 
 function renderMenuData(data) {
@@ -729,14 +760,24 @@ function renderMenuData(data) {
     const shoppingTabEl = document.getElementById('tab-shopping');
     const isShoppingActive = shoppingTabEl && shoppingTabEl.classList.contains('active');
     showView('view-menu');
-    document.getElementById('weekly-menu-list').innerHTML = data.menu.map(d => `
-    <div class="menu-day-card">
-    <div class="menu-card-header"><h4>Giorno ${d.day}</h4></div>
-    ${renderMealControl(d.day, 'lunch', d.lunch, data.people)}
-    <hr class="meal-divider">
-    ${renderMealControl(d.day, 'dinner', d.dinner, data.people)}
-    </div>
-    `).join('');
+
+    // Recupera i valori di persone per display o fallback
+    const lPeople = data.lunchPeople || data.people || 2;
+    const dPeople = data.dinnerPeople || data.people || 2;
+
+    document.getElementById('weekly-menu-list').innerHTML = data.menu.map(d => {
+        // Usa dateFormatted dal backend, fallback a "Giorno X" se vecchio dato
+        const title = d.dateFormatted || `Giorno ${d.day}`;
+        
+        return `
+        <div class="menu-day-card">
+            <div class="menu-card-header"><h4>${title}</h4></div>
+            ${renderMealControl(d.day, 'lunch', d.lunch, lPeople)}
+            <hr class="meal-divider">
+            ${renderMealControl(d.day, 'dinner', d.dinner, dPeople)}
+        </div>
+        `;
+    }).join('');
     const extraDiv = document.getElementById('extra-meals-list');
     extraDiv.innerHTML = '';
     if (data.extraMeals && data.extraMeals.length > 0) {
